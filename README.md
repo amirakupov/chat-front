@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Toc2me — тестовый стенд
 
-## Getting Started
+Локальный стенд для проверки чата: переписка зритель↔автор, ответы AI-персоны, видео-контекст.
 
-First, run the development server:
+## Главное про две личности
+
+Кука сессии одна на хост, поэтому **две личности — это два окна браузера**:
+
+- обычное окно — зритель (`user@demo.local`);
+- окно инкогнито — автор (`creator@demo.local`).
+
+Пароль у обоих: `demo1234`. В двух обычных окнах второй вход перезатрёт первый, и будет
+казаться, что стенд сломан. Выхода нет намеренно: в бэкенде нет `/auth/logout`, а кука
+`httpOnly` — полный выход делается очисткой кук в devtools.
+
+## Запуск
+
+### 1. Бэкенд
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd ../Toc2meBack
+DB="postgres://amirakupov:postgres@localhost:5432/toc2me"
+psql "$DB" -f scripts/migrations/001_asset_object_storage.sql   # на свежей базе
+psql "$DB" -f scripts/migrations/002_widen_upload_id.sql        # на свежей базе
+psql "$DB" -f scripts/seed-demo-users.sql                      # демо-аккаунты
+export OPENAI_API_KEY=sk-...                                   # без него AI молчит
+./mvnw spring-boot:run
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Миграции обязательны: `ddl-auto` не переписывает CHECK-констрейнты, и статус `UPLOADING`
+без них отвергается базой.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Без `OPENAI_API_KEY` бин провайдера не создаётся, и каждое сообщение отвечает жёлтой
+плашкой `ai_unavailable`. Это правильное поведение, но проверять чат так нельзя.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Стенд
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Порт обязан быть **3000** — он прошит в CORS бэкенда (`app.cors.allowed-origins`).
+Адрес бэкенда берётся из `NEXT_PUBLIC_API_URL` в `.env.local`; файл не в гите, а без него
+используется `http://localhost:8080`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Наполнить ленту
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Либо залить видео вручную в «Студии», либо скриптом бэкенда:
 
-## Deploy on Vercel
+```bash
+cd ../Toc2meBack
+BASE_URL=http://localhost:8080 EMAIL=creator@demo.local PASSWORD=demo1234 \
+  ./scripts/seed_videos.sh video
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Чеклист проверки
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Роли и вход
+- [ ] «войти как зритель» → в шапке `USER`, есть числовой id
+- [ ] «войти как автор» → `CREATOR`
+- [ ] зритель нажимает «стать автором» → роль сменилась, `/studio` открылась
+- [ ] профиль сохраняется, после «обновить» изменения на месте
+- [ ] интересы показываются и сохраняются
+
+### Ассеты
+- [ ] загрузка mp4: прогресс по частям, в конце статус `ACTIVE`
+- [ ] видео проигрывается в `<video>` — подписанный URL работает без заголовка авторизации
+- [ ] `aiContext` сохраняется через «сохранить метаданные»
+- [ ] аватар персоны грузится и её id попадает в форму
+- [ ] удаление ассета убирает его из списка
+
+### Лента
+- [ ] чужие клипы показываются, свои — нет
+- [ ] «сохранить» добавляет автора в избранное
+- [ ] повторный свайп по тому же клипу даёт `400`, стенд продолжает работать
+
+### Чат — главное
+- [ ] диалог из ленты открывается сразу с приветствием персоны
+- [ ] у зрителя ответ персоны набирается токенами в пунктирном пузыре
+- [ ] у автора оба сообщения появляются без перезагрузки
+- [ ] под сообщением написано «из клипа #N»
+- [ ] персона в ответе опирается на `aiContext` клипа
+- [ ] автор пишет сам → второго ответа AI нет
+- [ ] сообщение на запретную тему → системная плашка вместо реплики персоны
+- [ ] непрочитанные считаются, после открытия диалога сбрасываются
+
+### Ошибки видны
+- [ ] без `OPENAI_API_KEY` → плашка `ai_unavailable`, а не тишина
+- [ ] 13 сообщений за минуту → плашка `rate_limited`
+- [ ] `/studio` под ролью `USER` → `403 access denied` (бэкенд намеренно не объясняет причину, она в его логе)
+- [ ] `/debug` показывает всю последовательность событий
+
+## Что стенд не проверяет
+
+Сброс пароля (нужен почтовый ящик), R2 и CDN (дев-режим держит файлы на диске),
+работу в нескольких инстансах (реестр SSE-подключений живёт в памяти процесса).
