@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to the same branch makes the previous run pointless — cancel it instead of queueing.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # One job on purpose. Splitting lint/test/build across jobs would repeat `npm ci` three times,
+  # and here the install costs more than every check put together.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      # Cheap checks first: they fail in seconds, the build takes minutes.
+      - run: npm run lint
+
+      # next-env.d.ts and the route types live in .next and are gitignored, so a bare `tsc` on a
+      # fresh checkout would fail on missing globals. `next typegen` writes them without a build.
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # .next/cache is what makes the second build fast; setup-node's cache does not cover it.
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'lib/**', 'components/**') }}
+          restore-keys: nextjs-${{ hashFiles('package-lock.json') }}-
+
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  # Proves the Dockerfile still builds. Only on main: on a pull request it would double the wait
+  # for a check that rarely breaks on its own. Delete the job if the image is not deployed anywhere.
+  docker:
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          # Layer cache in the Actions cache, so an unchanged lockfile skips npm ci entirely.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
