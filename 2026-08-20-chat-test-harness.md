@@ -1,70 +1,73 @@
-# Тестовый стенд чата на Next.js — план реализации
+
+
+
+# Next.js chat test harness — implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Локальный стенд, на котором клиент сам проверяет переписку user↔creator, стриминговые ответы AI-персоны и то, что персона знает про видео, — вместе со всем, на что чат опирается: ролями, ассетами, лентой, персоной.
+**Goal:** A local harness on which the client checks user↔creator messaging, streamed AI-persona replies and what the persona knows about a video — together with everything the chat rests on: roles, assets, the feed, the persona.
 
-**Architecture:** Next.js App Router, все страницы клиентские. Браузер ходит в бэкенд напрямую с `credentials: "include"` — прокси-роутов Next нет сознательно, они буферизуют SSE. Две личности держатся в двух окнах браузера (обычное и инкогнито), потому что кука одна на хост. Логика, где ошибки не видны глазом, вынесена в чистые модули под тестами: сборка стримового ответа и нарезка файла на части.
+**Architecture:** Next.js App Router, every page a client component. The browser talks to the backend directly with `credentials: "include"` — there are deliberately no Next proxy routes, since they buffer SSE. The two identities are held in two browser windows (normal and incognito), because the cookie is per host. The logic where mistakes are invisible to the eye is extracted into pure modules under test: assembling the streamed reply and slicing a file into parts.
 
-**Tech Stack:** Next.js 15, TypeScript, Vitest. Ноль UI-библиотек, ноль стейт-менеджеров. Бэкенд — существующий Spring Boot на `:8080`.
+**Tech Stack:** Next.js 15, TypeScript, Vitest. Zero UI libraries, zero state managers. The backend is the existing Spring Boot on `:8080`.
 
 **Spec:** `docs/superpowers/specs/2026-08-20-chat-test-harness-design.md`
 
 ## Global Constraints
 
-- Стенд живёт в **`~/Desktop/Work/Toc2me-Harness`** (новый проект). Существующий `Toc2me-Frontend` — Vite, его не трогаем.
-- Порт стенда — **ровно 3000**: он прошит в CORS бэкенда (`app.cors.allowed-origins`). Бэкенд — `http://localhost:8080`.
-- Каждый запрос к бэкенду идёт с **`credentials: "include"`**. Route handlers и rewrites в Next **не создавать**.
-- Все компоненты — клиентские (`"use client"`). Серверных компонентов нет: они потребовали бы второго пути аутентификации.
-- Никаких UI-библиотек, CSS-фреймворков и стейт-менеджеров. Один `app/globals.css` на CSS-переменных.
-- Тесты — Vitest, только на чистые модули: `reply-reducer.ts`, `upload.ts`, `parseError` из `api.ts`. Остальное проверяется руками — это тестовый стенд.
-- Изменения в бэкенде (репозиторий `Toc2meBack`) — **только** Task 1 и Task 2. Всё прочее в бэкенде не трогать.
-- Имена SSE-событий берутся из `ChatStreamEvent`: `message`, `reply-start`, `token`, `reply-end`, `error`.
-- Коммиты — чистым сообщением **без трейлеров коавторства**, сразу `git push`.
-- Тесты бэкенда прогонять как `./mvnw -B test -Dtest='!Toc2meBackApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false` — `Toc2meBackApplicationTests` требует живую БД и падает по базлайну, это не связано с этой работой.
+- The harness lives in **`~/Desktop/Work/Toc2me-Harness`** (a new project). The existing `Toc2me-Frontend` is Vite; we leave it alone.
+- The harness port is **exactly 3000**: it is hardcoded in the backend's CORS config (`app.cors.allowed-origins`). The backend is `http://localhost:8080`.
+- Every request to the backend carries **`credentials: "include"`**. Do **not** create route handlers or rewrites in Next.
+- Every component is a client component (`"use client"`). There are no server components: they would demand a second authentication path.
+- No UI libraries, CSS frameworks or state managers. A single `app/globals.css` built on CSS variables.
+- Tests are Vitest, on pure modules only: `reply-reducer.ts`, `upload.ts`, `parseError` from `api.ts`. Everything else is checked by hand — this is a test harness.
+- Backend changes (the `Toc2meBack` repository) belong to Task 1 and Task 2 **only**. Touch nothing else in the backend.
+- The SSE event names come from `ChatStreamEvent`: `message`, `reply-start`, `token`, `reply-end`, `error`.
+- Commits use a plain message **with no co-authorship trailers**, followed immediately by `git push`.
+- Run the backend tests as `./mvnw -B test -Dtest='!Toc2meBackApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false` — `Toc2meBackApplicationTests` needs a live database and fails at baseline, which has nothing to do with this work.
 
 ---
 
 ## File Structure
 
-### Репозиторий `Toc2meBack` (только Task 1–2)
+### The `Toc2meBack` repository (Task 1–2 only)
 
-| Файл | Ответственность |
+| File | Responsibility |
 |---|---|
 | `src/main/java/.../user/controller/UserController.java` | +`GET /api/user/me` |
-| `src/test/java/.../user/controller/UserControllerTest.java` | тест на `/me` |
-| `scripts/seed-demo-users.sql` | готовые аккаунты, персона, интересы |
+| `src/test/java/.../user/controller/UserControllerTest.java` | the test for `/me` |
+| `scripts/seed-demo-users.sql` | ready-made accounts, persona, interests |
 
-### Репозиторий `Toc2me-Harness` (Task 3–13)
+### The `Toc2me-Harness` repository (Task 3–13)
 
-| Файл | Ответственность |
+| File | Responsibility |
 |---|---|
-| `app/globals.css` | вся вёрстка стенда, CSS-переменные |
-| `app/layout.tsx` | провайдеры сессии и стрима, навигация |
-| `app/page.tsx` | вход, личность, роль, профиль, интересы, регистрация |
-| `app/studio/page.tsx` | персона и ассеты креатора |
-| `app/feed/page.tsx` | лента, свайпы, избранное, старт диалога |
-| `app/chats/page.tsx` | список диалогов |
-| `app/chats/[id]/page.tsx` | переписка, стрим токенов, контекст клипа |
-| `app/debug/page.tsx` | сырой журнал SSE, состояние стрима |
-| `components/ErrorBar.tsx` | единственное место, где показывается `ApiError` |
-| `components/RawJson.tsx` | тумблер «сырой JSON» для любого объекта |
-| `lib/types.ts` | зеркало DTO бэкенда |
-| `lib/api.ts` | транспорт, `credentials: include`, разбор ошибок |
-| `lib/demo.ts` | демо-креды из seed-скрипта |
-| `lib/session.tsx` | кто я: `/me`, вход, смена аккаунта |
-| `lib/events.ts` | имена и типы SSE-событий |
-| `lib/reply-reducer.ts` | сборка ответа из событий (чистая, под тестом) |
-| `lib/stream.tsx` | один `EventSource` на вкладку, журнал |
-| `lib/upload.ts` | трёхшаговая прямая загрузка (нарезка под тестом) |
-| `lib/seen-assets.ts` | клипы, увиденные в ленте — источник контекста для чата |
-| `README.md` | инструкция клиенту и чеклист ручной проверки |
+| `app/globals.css` | the harness's entire layout, CSS variables |
+| `app/layout.tsx` | the session and stream providers, navigation |
+| `app/page.tsx` | sign-in, identity, role, profile, interests, registration |
+| `app/studio/page.tsx` | the creator's persona and assets |
+| `app/feed/page.tsx` | the feed, swipes, favourites, starting a conversation |
+| `app/chats/page.tsx` | the conversation list |
+| `app/chats/[id]/page.tsx` | the messaging screen, token stream, clip context |
+| `app/debug/page.tsx` | the raw SSE log, stream status |
+| `components/ErrorBar.tsx` | the single place an `ApiError` is shown |
+| `components/RawJson.tsx` | a “raw JSON” toggle for any object |
+| `lib/types.ts` | a mirror of the backend's DTOs |
+| `lib/api.ts` | transport, `credentials: include`, error parsing |
+| `lib/demo.ts` | the demo credentials from the seed script |
+| `lib/session.tsx` | who am I: `/me`, sign-in, switching accounts |
+| `lib/events.ts` | the SSE event names and types |
+| `lib/reply-reducer.ts` | assembling a reply out of events (pure, under test) |
+| `lib/stream.tsx` | one `EventSource` per tab, plus the log |
+| `lib/upload.ts` | the three-step direct upload (slicing under test) |
+| `lib/seen-assets.ts` | clips seen in the feed — the source of context for the chat |
+| `README.md` | instructions for the client and the manual test checklist |
 
 ---
 
 ## Task 1: `GET /api/user/me`
 
-Клиент не может узнать свой id: subject токена — email, в claim'ах только `role` и `firstTimeLogin`. Из-за этого `PATCH /api/user/update/{id}` невозможно позвать. Это дыра в API, а не неудобство стенда.
+A client cannot learn its own id: the token's subject is the email, and the only claims are `role` and `firstTimeLogin`. That makes `PATCH /api/user/update/{id}` impossible to call. That is a hole in the API, not an inconvenience of the harness.
 
 **Files:**
 - Modify: `src/main/java/com/backend/toc2me/user/controller/UserController.java`
@@ -74,9 +77,9 @@
 - Consumes: `UserAdapter.user()`, `UserMapper.toDto(User)`, `UserDto`.
 - Produces: `GET /api/user/me` → `UserDto { id, name, email, age, location, role }`.
 
-- [ ] **Step 1: Написать падающий тест**
+- [ ] **Step 1: Write a failing test**
 
-Создать `src/test/java/com/backend/toc2me/user/controller/UserControllerTest.java`:
+Create `src/test/java/com/backend/toc2me/user/controller/UserControllerTest.java`:
 
 ```java
 package com.backend.toc2me.user.controller;
@@ -120,14 +123,14 @@ class UserControllerTest {
 }
 ```
 
-- [ ] **Step 2: Запустить и убедиться в падении**
+- [ ] **Step 2: Run it and confirm it fails**
 
 Run: `./mvnw -B test -Dtest=UserControllerTest`
-Expected: FAIL — компиляция, метода `me` не существует.
+Expected: FAIL — compilation, there is no `me` method.
 
-- [ ] **Step 3: Добавить эндпоинт**
+- [ ] **Step 3: Add the endpoint**
 
-В `UserController.java` добавить импорт `org.springframework.web.bind.annotation.GetMapping` и метод перед `becomeCreator`:
+In `UserController.java` add the import `org.springframework.web.bind.annotation.GetMapping` and the method just before `becomeCreator`:
 
 ```java
     /**
@@ -143,17 +146,17 @@ Expected: FAIL — компиляция, метода `me` не существу
     }
 ```
 
-- [ ] **Step 4: Запустить и убедиться в прохождении**
+- [ ] **Step 4: Run it and confirm it passes**
 
 Run: `./mvnw -B test -Dtest=UserControllerTest`
-Expected: PASS, 1 тест.
+Expected: PASS, 1 test.
 
-- [ ] **Step 5: Прогнать весь набор**
+- [ ] **Step 5: Run the whole suite**
 
 Run: `./mvnw -B test -Dtest='!Toc2meBackApplicationTests' -Dsurefire.failIfNoSpecifiedTests=false`
-Expected: BUILD SUCCESS, 62 теста.
+Expected: BUILD SUCCESS, 62 tests.
 
-- [ ] **Step 6: Коммит**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/main/java/com/backend/toc2me/user/controller/UserController.java src/test/java/com/backend/toc2me/user/controller/UserControllerTest.java
@@ -163,19 +166,19 @@ git push
 
 ---
 
-## Task 2: Seed-скрипт демо-аккаунтов
+## Task 2: Seed script for the demo accounts
 
-Логин требует `account_status = 'ACTIVE'` (`AuthService.loginAndGetToken`), а его ставит только подтверждение письма. Скрипт ставит статус напрямую — почта уходит из уравнения.
+Login requires `account_status = 'ACTIVE'` (`AuthService.loginAndGetToken`), and only email confirmation sets it. The script sets the status directly — mail leaves the equation.
 
 **Files:**
 - Create: `scripts/seed-demo-users.sql`
 
 **Interfaces:**
-- Produces: аккаунты `user@demo.local` / `creator@demo.local`, пароль `demo1234`; включённая персона креатора; пять интересов.
+- Produces: the accounts `user@demo.local` / `creator@demo.local` with the password `demo1234`; the creator's persona, enabled; five interests.
 
-- [ ] **Step 1: Написать скрипт**
+- [ ] **Step 1: Write the script**
 
-Создать `scripts/seed-demo-users.sql`:
+Create `scripts/seed-demo-users.sql`:
 
 ```sql
 -- Demo accounts for the chat test harness.
@@ -212,11 +215,11 @@ INSERT INTO creator_personas (creator_id, display_name, description, tonality, t
                               boundaries, greeting, enabled, created_at)
 SELECT u.id,
        'Anna',
-       'Танцовщица из Вены. Снимает короткие клипы с репетиций и уличных выступлений.',
-       'Тепло и коротко, на языке собеседника. Без формальностей, иногда одно эмодзи.',
-       'танец, репетиции, Вена, музыка, закулисье съёмок',
-       'политика, медицинские советы, встречи офлайн',
-       'Привет! Рада, что зашёл. Спрашивай про клип — расскажу, как снимали.',
+       'A dancer from Vienna. Films short clips from rehearsals and street performances.',
+       'Warm and brief, in the language the other person uses. No formalities, the odd single emoji.',
+       'dance, rehearsals, Vienna, music, behind the scenes of a shoot',
+       'politics, medical advice, meeting up offline',
+       'Hi! Glad you dropped by. Ask me about the clip — I will tell you how we filmed it.',
        true,
        now()
 FROM users u
@@ -228,21 +231,21 @@ ON CONFLICT (creator_id) DO UPDATE
 
 -- GET /api/interests returns [] on a fresh database: nothing else seeds this table.
 INSERT INTO interests (name)
-VALUES ('Танцы'), ('Музыка'), ('Путешествия'), ('Спорт'), ('Кулинария')
+VALUES ('Dance'), ('Music'), ('Travel'), ('Sport'), ('Cooking')
 ON CONFLICT (name) DO NOTHING;
 ```
 
-- [ ] **Step 2: Применить к базе**
+- [ ] **Step 2: Apply it to the database**
 
 ```bash
 psql "${DATABASE_URL:-postgres://amirakupov:postgres@localhost:5432/toc2me}" -f scripts/seed-demo-users.sql
 ```
 
-Expected: три `INSERT 0 …` без ошибок. Таблицы должен был уже создать Hibernate — если их нет, поднять бэкенд один раз (`./mvnw spring-boot:run`) и повторить.
+Expected: three `INSERT 0 …` lines with no errors. Hibernate should have created the tables already — if they are missing, start the backend once (`./mvnw spring-boot:run`) and retry.
 
-- [ ] **Step 3: Проверить, что логин работает**
+- [ ] **Step 3: Check that login works**
 
-Бэкенд должен быть запущен.
+The backend has to be running.
 
 ```bash
 curl -si -X POST http://localhost:8080/auth/login \
@@ -250,15 +253,15 @@ curl -si -X POST http://localhost:8080/auth/login \
   -d '{"email":"user@demo.local","password":"demo1234"}' | head -20
 ```
 
-Expected: `HTTP/1.1 200`, заголовок `Set-Cookie: access_token=…; Max-Age=86400`, тело `{"token":"eyJ…"}`.
+Expected: `HTTP/1.1 200`, a `Set-Cookie: access_token=…; Max-Age=86400` header, and the body `{"token":"eyJ…"}`.
 
-Если пришёл `401 invalid credentials or token` — значит эта сборка Spring Security не приняла префикс `$2y$`. Тогда заменить в скрипте `$2y$` на `$2a$` (тот же алгоритм, другая метка ревизии) и повторить шаги 2–3:
+If a `401 invalid credentials or token` comes back, this build of Spring Security did not accept the `$2y$` prefix. In that case replace `$2y$` with `$2a$` in the script (the same algorithm, a different revision marker) and repeat steps 2–3:
 
 ```bash
 sed -i '' 's/\$2y\$/\$2a\$/g' scripts/seed-demo-users.sql
 ```
 
-- [ ] **Step 4: Проверить креатора и персону**
+- [ ] **Step 4: Check the creator and the persona**
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
@@ -269,9 +272,9 @@ curl -s http://localhost:8080/api/persona -H "Authorization: Bearer $TOKEN"
 curl -s http://localhost:8080/api/user/me -H "Authorization: Bearer $TOKEN"
 ```
 
-Expected: персона с `"displayName":"Anna"` и `"enabled":true`; `/me` отдаёт `"role":"CREATOR"` и числовой `id`.
+Expected: a persona with `"displayName":"Anna"` and `"enabled":true`; `/me` returns `"role":"CREATOR"` and a numeric `id`.
 
-- [ ] **Step 5: Коммит**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add scripts/seed-demo-users.sql
@@ -281,16 +284,16 @@ git push
 
 ---
 
-## Task 3: Каркас стенда
+## Task 3: The harness skeleton
 
 **Files:**
-- Create: `~/Desktop/Work/Toc2me-Harness/` (весь проект)
-- Create: `.env.local`, `vitest.config.ts`, `app/globals.css`, `app/layout.tsx`, `app/page.tsx` (заглушка), `components/ErrorBar.tsx`, `components/RawJson.tsx`
+- Create: `~/Desktop/Work/Toc2me-Harness/` (the whole project)
+- Create: `.env.local`, `vitest.config.ts`, `app/globals.css`, `app/layout.tsx`, `app/page.tsx` (a placeholder), `components/ErrorBar.tsx`, `components/RawJson.tsx`
 
 **Interfaces:**
-- Produces: `ErrorBar({ error, onClear })`, `RawJson({ value, label? })`, переменная окружения `NEXT_PUBLIC_API_URL`.
+- Produces: `ErrorBar({ error, onClear })`, `RawJson({ value, label? })`, and the `NEXT_PUBLIC_API_URL` environment variable.
 
-- [ ] **Step 1: Создать проект**
+- [ ] **Step 1: Create the project**
 
 ```bash
 cd ~/Desktop/Work
@@ -301,7 +304,7 @@ npm i -D vitest
 rm -f app/page.module.css public/*.svg
 ```
 
-- [ ] **Step 2: Настроить окружение и скрипты**
+- [ ] **Step 2: Set up the environment and the scripts**
 
 `.env.local`:
 
@@ -309,7 +312,7 @@ rm -f app/page.module.css public/*.svg
 NEXT_PUBLIC_API_URL=http://localhost:8080
 ```
 
-В `package.json` в `scripts` добавить:
+Add to `scripts` in `package.json`:
 
 ```json
     "test": "vitest run",
@@ -326,9 +329,9 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 3: Стили**
+- [ ] **Step 3: Styles**
 
-Заменить `app/globals.css` целиком:
+Replace `app/globals.css` wholesale:
 
 ```css
 :root {
@@ -466,7 +469,7 @@ table.log { width: 100%; border-collapse: collapse; font-family: var(--mono); fo
 table.log td, table.log th { border-bottom: 1px solid var(--line); padding: .3rem .5rem; text-align: left; vertical-align: top; }
 ```
 
-- [ ] **Step 4: Общие компоненты**
+- [ ] **Step 4: Shared components**
 
 `components/ErrorBar.tsx`:
 
@@ -502,7 +505,7 @@ export function ErrorBar({ error, onClear }: { error: ApiError | null; onClear: 
 "use client";
 
 /** Every screen carries one: the client must be able to see the real payload. */
-export function RawJson({ value, label = "сырой JSON" }: { value: unknown; label?: string }) {
+export function RawJson({ value, label = "raw JSON" }: { value: unknown; label?: string }) {
   return (
     <details className="raw">
       <summary>{label}</summary>
@@ -512,7 +515,7 @@ export function RawJson({ value, label = "сырой JSON" }: { value: unknown; 
 }
 ```
 
-- [ ] **Step 5: Каркас страницы**
+- [ ] **Step 5: The page skeleton**
 
 `app/layout.tsx`:
 
@@ -520,18 +523,18 @@ export function RawJson({ value, label = "сырой JSON" }: { value: unknown; 
 import "./globals.css";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = { title: "Toc2me — тестовый стенд" };
+export const metadata: Metadata = { title: "Toc2me — test harness" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="en">
       <body>{children}</body>
     </html>
   );
 }
 ```
 
-`app/page.tsx` — временная заглушка, её заменит Task 5:
+`app/page.tsx` — a temporary placeholder that Task 5 will replace:
 
 ```tsx
 "use client";
@@ -539,23 +542,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 export default function Home() {
   return (
     <main>
-      <h1>Toc2me — тестовый стенд</h1>
-      <p className="dim">Каркас готов. Вход появится в Task 5.</p>
+      <h1>Toc2me — test harness</h1>
+      <p className="dim">The skeleton is ready. Sign-in arrives in Task 5.</p>
     </main>
   );
 }
 ```
 
-- [ ] **Step 6: Проверить сборку и запуск**
+- [ ] **Step 6: Check the build and the dev server**
 
 ```bash
 npm run build
 npm run dev
 ```
 
-Expected: `build` без ошибок; `http://localhost:3000` открывается на тёмном фоне с заголовком. Порт обязан быть 3000 — если он занят, освободить, а не менять (порт прошит в CORS бэкенда).
+Expected: `build` with no errors; `http://localhost:3000` opens on a dark background with the heading. The port has to be 3000 — if it is taken, free it rather than change it (the port is hardcoded in the backend's CORS config).
 
-- [ ] **Step 7: Коммит**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add -A
@@ -564,16 +567,16 @@ git commit -m "chore: scaffold the Next.js test harness"
 
 ---
 
-## Task 4: Типы и транспорт
+## Task 4: Types and transport
 
 **Files:**
 - Create: `lib/types.ts`, `lib/api.ts`, `lib/demo.ts`
 - Test: `lib/api.test.ts`
 
 **Interfaces:**
-- Produces: `api<T>(path, init?): Promise<T>`, `parseError(status, statusText, body): ApiError`, `isApiError(e)`, `API`, все типы DTO, `DEMO`.
+- Produces: `api<T>(path, init?): Promise<T>`, `parseError(status, statusText, body): ApiError`, `isApiError(e)`, `API`, every DTO type, `DEMO`.
 
-- [ ] **Step 1: Зеркало DTO бэкенда**
+- [ ] **Step 1: Mirror the backend's DTOs**
 
 `lib/types.ts`:
 
@@ -685,7 +688,7 @@ export type Page<T> = {
 };
 ```
 
-- [ ] **Step 2: Написать падающий тест на разбор ошибок**
+- [ ] **Step 2: Write a failing test for error parsing**
 
 `lib/api.test.ts`:
 
@@ -725,12 +728,12 @@ describe("parseError", () => {
 });
 ```
 
-- [ ] **Step 3: Запустить и убедиться в падении**
+- [ ] **Step 3: Run it and confirm it fails**
 
 Run: `npm test`
-Expected: FAIL — `./api` не существует.
+Expected: FAIL — `./api` does not exist.
 
-- [ ] **Step 4: Транспорт**
+- [ ] **Step 4: Transport**
 
 `lib/api.ts`:
 
@@ -805,7 +808,7 @@ export function send<T>(method: string, path: string, payload?: unknown): Promis
 }
 ```
 
-- [ ] **Step 5: Демо-креды**
+- [ ] **Step 5: Demo credentials**
 
 `lib/demo.ts`:
 
@@ -817,12 +820,12 @@ export const DEMO = {
 } as const;
 ```
 
-- [ ] **Step 6: Запустить и убедиться в прохождении**
+- [ ] **Step 6: Run it and confirm it passes**
 
 Run: `npm test`
-Expected: PASS, 3 теста.
+Expected: PASS, 3 tests.
 
-- [ ] **Step 7: Коммит**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add lib components
@@ -831,7 +834,7 @@ git commit -m "feat: typed API transport with credentialed fetch"
 
 ---
 
-## Task 5: Сессия и экран входа
+## Task 5: The session and the sign-in screen
 
 **Files:**
 - Create: `lib/session.tsx`
@@ -841,7 +844,7 @@ git commit -m "feat: typed API transport with credentialed fetch"
 - Consumes: `api`, `send`, `UserDto`, `DEMO`, `ErrorBar`, `RawJson`.
 - Produces: `SessionProvider`, `useSession(): { user, loading, error, clearError, login(email, password), refresh(), becomeCreator() }`.
 
-- [ ] **Step 1: Слой сессии**
+- [ ] **Step 1: The session layer**
 
 `lib/session.tsx`:
 
@@ -925,9 +928,9 @@ export function useSession(): SessionValue {
 }
 ```
 
-Обратите внимание: метода `logout` **нет**, и это не пропуск. В бэкенде нет `/auth/logout`, а кука `httpOnly` — из JS её не удалить. Сменить личность можно только входом под другим аккаунтом (login перезаписывает куку). Полный выход — очистка кук в devtools. Это написано на экране в Step 3.
+Note that there is **no** `logout` method, and that is not an omission. The backend has no `/auth/logout`, and the cookie is `httpOnly` — JS cannot delete it. The only way to change identity is to sign in as another account (login overwrites the cookie). A full sign-out means clearing cookies in devtools. This is written on the screen in Step 3.
 
-- [ ] **Step 2: Подключить провайдер и навигацию**
+- [ ] **Step 2: Wire up the provider and the navigation**
 
 `app/layout.tsx`:
 
@@ -937,11 +940,11 @@ import type { Metadata } from "next";
 import { SessionProvider } from "@/lib/session";
 import { Nav } from "@/components/Nav";
 
-export const metadata: Metadata = { title: "Toc2me — тестовый стенд" };
+export const metadata: Metadata = { title: "Toc2me — test harness" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="en">
       <body>
         <SessionProvider>
           <Nav />
@@ -965,20 +968,20 @@ export function Nav() {
   const { user } = useSession();
   return (
     <nav className="top">
-      <Link href="/">вход</Link>
-      <Link href="/feed">лента</Link>
-      <Link href="/studio">студия</Link>
-      <Link href="/chats">чаты</Link>
+      <Link href="/">sign in</Link>
+      <Link href="/feed">feed</Link>
+      <Link href="/studio">studio</Link>
+      <Link href="/chats">chats</Link>
       <Link href="/debug">debug</Link>
       <span className="who">
-        {user ? `#${user.id} ${user.email} · ${user.role}` : "не в системе"}
+        {user ? `#${user.id} ${user.email} · ${user.role}` : "signed out"}
       </span>
     </nav>
   );
 }
 ```
 
-- [ ] **Step 3: Экран входа**
+- [ ] **Step 3: The sign-in screen**
 
 `app/page.tsx`:
 
@@ -1001,20 +1004,20 @@ export default function Home() {
   return (
     <main>
       <ErrorBar error={error} onClear={clearError} />
-      <h1>Тестовый стенд Toc2me</h1>
+      <h1>Toc2me test harness</h1>
       <p className="dim">
-        Две личности — два окна: обычное для зрителя, инкогнито для автора. Кука одна на хост,
-        поэтому в двух обычных окнах вход перезатрёт сам себя.
+        Two identities — two windows: a normal one for the viewer, incognito for the creator. The
+        cookie is per host, so in two normal windows a sign-in overwrites itself.
       </p>
 
       <section className="card">
-        <h2>Вход</h2>
+        <h2>Sign in</h2>
         <div className="row">
           <button onClick={() => login(DEMO.user.email, DEMO.user.password)}>
-            войти как зритель
+            sign in as viewer
           </button>
           <button onClick={() => login(DEMO.creator.email, DEMO.creator.password)}>
-            войти как автор
+            sign in as creator
           </button>
         </div>
         <div className="grid2" style={{ marginTop: ".8rem" }}>
@@ -1023,25 +1026,26 @@ export default function Home() {
             <input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div>
-            <label>пароль</label>
+            <label>password</label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
         </div>
         <div className="row" style={{ marginTop: ".6rem" }}>
           <button className="ghost" onClick={() => login(email, password)}>
-            войти
+            sign in
           </button>
           <span className="dim">
-            выхода нет: в бэкенде нет /auth/logout, а кука httpOnly. Смена личности — вход под
-            другим аккаунтом; полный выход — очистить куки в devtools.
+            there is no sign-out: the backend has no /auth/logout and the cookie is httpOnly.
+            Switching identity means signing in as another account; a full sign-out means clearing
+            cookies in devtools.
           </span>
         </div>
       </section>
 
       <section className="card">
-        <h2>Кто я</h2>
+        <h2>Who am I</h2>
         {loading ? (
-          <p className="dim">загрузка…</p>
+          <p className="dim">loading…</p>
         ) : user ? (
           <>
             <p className="mono">
@@ -1049,14 +1053,14 @@ export default function Home() {
             </p>
             <div className="row">
               <button className="ghost" onClick={() => void refresh()}>
-                обновить
+                refresh
               </button>
-              {user.role === "USER" && <button onClick={() => void becomeCreator()}>стать автором</button>}
+              {user.role === "USER" && <button onClick={() => void becomeCreator()}>become a creator</button>}
             </div>
             <RawJson value={user} />
           </>
         ) : (
-          <p className="dim">не в системе</p>
+          <p className="dim">signed out</p>
         )}
       </section>
 
@@ -1091,22 +1095,22 @@ function Profile() {
 
   return (
     <section className="card">
-      <h2>Профиль</h2>
+      <h2>Profile</h2>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <div className="grid2">
         <div>
-          <label>имя</label>
+          <label>name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label>возраст</label>
+          <label>age</label>
           <input value={age} onChange={(e) => setAge(e.target.value)} />
         </div>
       </div>
-      <label>город</label>
+      <label>city</label>
       <input value={location} onChange={(e) => setLocation(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить</button>
+        <button onClick={() => void save()}>save</button>
       </div>
     </section>
   );
@@ -1137,9 +1141,9 @@ function Interests({ enabled }: { enabled: boolean }) {
 
   return (
     <section className="card">
-      <h2>Интересы</h2>
+      <h2>Interests</h2>
       <ErrorBar error={err} onClear={() => setErr(null)} />
-      {all.length === 0 && <p className="dim">пусто — прогони seed-demo-users.sql</p>}
+      {all.length === 0 && <p className="dim">empty — run seed-demo-users.sql</p>}
       <div className="row">
         {all.map((i) => (
           <label key={i.id} className="row" style={{ width: "auto", gap: ".3rem" }}>
@@ -1157,9 +1161,9 @@ function Interests({ enabled }: { enabled: boolean }) {
       </div>
       <div className="row" style={{ marginTop: ".6rem" }}>
         <button disabled={!enabled} onClick={() => void save()}>
-          сохранить
+          save
         </button>
-        {saved && <span className="dim">сохранено</span>}
+        {saved && <span className="dim">saved</span>}
       </div>
       <RawJson value={all} label="GET /api/interests" />
     </section>
@@ -1186,7 +1190,7 @@ function Registration() {
 
   return (
     <details className="card">
-      <summary>Регистрация с подтверждением (обычно не нужна — аккаунты засеяны)</summary>
+      <summary>Registration with confirmation (usually not needed — the accounts are seeded)</summary>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <div className="grid2" style={{ marginTop: ".6rem" }}>
         <div>
@@ -1194,7 +1198,7 @@ function Registration() {
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label>пароль</label>
+          <label>password</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
       </div>
@@ -1204,22 +1208,22 @@ function Registration() {
           onClick={() =>
             void run(
               () => send("POST", "/auth/register", { email, password, role: "USER" }),
-              "письмо отправлено",
+              "email sent",
             )
           }
         >
-          зарегистрировать
+          register
         </button>
         <button
           className="ghost"
           onClick={() =>
-            void run(() => send("POST", "/auth/resend-confirmation", { email }), "письмо переотправлено")
+            void run(() => send("POST", "/auth/resend-confirmation", { email }), "email resent")
           }
         >
-          переотправить письмо
+          resend email
         </button>
       </div>
-      <label>token из письма</label>
+      <label>token from the email</label>
       <input value={token} onChange={(e) => setToken(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
         <button
@@ -1227,36 +1231,36 @@ function Registration() {
           onClick={() =>
             void run(
               () => api(`/auth/confirm?token=${encodeURIComponent(token)}`),
-              "email подтверждён",
+              "email confirmed",
             )
           }
         >
-          подтвердить
+          confirm
         </button>
         {note && <span className="dim">{note}</span>}
       </div>
       <p className="dim">
-        Ссылка в письме ведёт на <span className="mono">localhost:3000/app/…</span> —
-        стенд такого роута не имеет, поэтому token надо скопировать из адресной строки вручную.
+        The link in the email points at <span className="mono">localhost:3000/app/…</span> — the
+        harness has no such route, so the token has to be copied out of the address bar by hand.
       </p>
     </details>
   );
 }
 ```
 
-- [ ] **Step 4: Проверить руками**
+- [ ] **Step 4: Check it by hand**
 
-Бэкенд запущен, seed прогнан. `npm run dev`, открыть `http://localhost:3000`:
+The backend is running and the seed has been applied. `npm run dev`, then open `http://localhost:3000`:
 
-1. «войти как зритель» → в шапке появляется `#N user@demo.local · USER`;
-2. «сохранить» в профиле → 200, после «обновить» имя изменилось;
-3. интересы показывают пять штук, сохранение отвечает без ошибки;
-4. «войти как автор» → шапка сменилась на `CREATOR` (та же кука перезаписана);
-5. в devtools → Application → Cookies видна `access_token`, `HttpOnly`, `Max-Age` около 86400.
+1. “sign in as viewer” → `#N user@demo.local · USER` appears in the header;
+2. “save” in the profile → 200, and after “refresh” the name has changed;
+3. the interests show five entries, and saving answers without an error;
+4. “sign in as creator” → the header switches to `CREATOR` (the same cookie, overwritten);
+5. in devtools → Application → Cookies you can see `access_token`, `HttpOnly`, `Max-Age` around 86400.
 
-Expected: все пять пунктов. Если `/api/user/me` даёт 404 — Task 1 не задеплоен, перезапустить бэкенд.
+Expected: all five items. If `/api/user/me` returns a 404, Task 1 is not deployed — restart the backend.
 
-- [ ] **Step 5: Коммит**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1265,9 +1269,9 @@ git commit -m "feat: session context and the sign-in screen"
 
 ---
 
-## Task 6: События и сборка ответа
+## Task 6: Events and assembling the reply
 
-Самая хитрая часть стенда: ответ персоны приходит и токенами, и отдельным `message`-событием, а черновой пузырь обязан сниматься в любом исходе. Поэтому — чистая функция под тестами.
+The trickiest part of the harness: the persona's reply arrives both as tokens and as a separate `message` event, and the draft bubble has to be retired in every outcome. Hence a pure function under test.
 
 **Files:**
 - Create: `lib/events.ts`, `lib/reply-reducer.ts`
@@ -1277,7 +1281,7 @@ git commit -m "feat: session context and the sign-in screen"
 - Consumes: `MessageResponse`.
 - Produces: `EV`, `StreamEvent`, `ChatState`, `emptyState(conversationId)`, `reduce(state, ev)`.
 
-- [ ] **Step 1: Имена и типы событий**
+- [ ] **Step 1: Event names and types**
 
 `lib/events.ts`:
 
@@ -1303,7 +1307,7 @@ export type StreamEvent =
 export const EV_NAMES = Object.values(EV);
 ```
 
-- [ ] **Step 2: Написать падающие тесты**
+- [ ] **Step 2: Write the failing tests**
 
 `lib/reply-reducer.test.ts`:
 
@@ -1348,10 +1352,10 @@ describe("reduce", () => {
 
   it("accumulates tokens into a draft", () => {
     let s = reduce(emptyState(7), start);
-    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "В " } });
-    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "Вене" } });
+    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "In " } });
+    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "Vienna" } });
 
-    expect(s.drafts.a1).toBe("В Вене");
+    expect(s.drafts.a1).toBe("In Vienna");
   });
 
   it("retires the draft on reply-end", () => {
@@ -1389,12 +1393,12 @@ describe("reduce", () => {
 });
 ```
 
-- [ ] **Step 3: Запустить и убедиться в падении**
+- [ ] **Step 3: Run it and confirm it fails**
 
 Run: `npm test`
-Expected: FAIL — `./reply-reducer` не существует.
+Expected: FAIL — `./reply-reducer` does not exist.
 
-- [ ] **Step 4: Реализовать редьюсер**
+- [ ] **Step 4: Implement the reducer**
 
 `lib/reply-reducer.ts`:
 
@@ -1463,12 +1467,12 @@ export function withHistory(state: ChatState, page: MessageResponse[]): ChatStat
 }
 ```
 
-- [ ] **Step 5: Запустить и убедиться в прохождении**
+- [ ] **Step 5: Run it and confirm it passes**
 
 Run: `npm test`
-Expected: PASS, 10 тестов (3 из Task 4 + 7 здесь).
+Expected: PASS, 10 tests (3 from Task 4 plus 7 here).
 
-- [ ] **Step 6: Коммит**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add lib
@@ -1477,7 +1481,7 @@ git commit -m "feat: stream event types and the reply reducer"
 
 ---
 
-## Task 7: SSE-стрим и экран debug
+## Task 7: The SSE stream and the debug screen
 
 **Files:**
 - Create: `lib/stream.tsx`, `app/debug/page.tsx`
@@ -1487,7 +1491,7 @@ git commit -m "feat: stream event types and the reply reducer"
 - Consumes: `EV_NAMES`, `StreamEvent`, `API`, `useSession`.
 - Produces: `StreamProvider`, `useStream(): { status, log, subscribe(listener), reconnect() }`.
 
-- [ ] **Step 1: Контекст стрима**
+- [ ] **Step 1: The stream context**
 
 `lib/stream.tsx`:
 
@@ -1573,9 +1577,9 @@ export function useStream(): StreamValue {
 }
 ```
 
-- [ ] **Step 2: Обернуть приложение**
+- [ ] **Step 2: Wrap the app**
 
-В `app/layout.tsx` добавить импорт `import { StreamProvider } from "@/lib/stream";` и вложить его **внутрь** `SessionProvider` (стрим открывается только когда известно, кто мы):
+In `app/layout.tsx` add the import `import { StreamProvider } from "@/lib/stream";` and nest it **inside** `SessionProvider` (the stream only opens once we know who we are):
 
 ```tsx
         <SessionProvider>
@@ -1586,7 +1590,7 @@ export function useStream(): StreamValue {
         </SessionProvider>
 ```
 
-- [ ] **Step 3: Экран debug**
+- [ ] **Step 3: The debug screen**
 
 `app/debug/page.tsx`:
 
@@ -1600,22 +1604,22 @@ export default function Debug() {
 
   return (
     <main>
-      <h1>Журнал стрима</h1>
+      <h1>Stream log</h1>
       <section className="card">
         <div className="row">
           <span className={`status ${status}`}>GET /api/chat/stream — {status}</span>
           <button className="ghost" onClick={reconnect}>
-            переподключить
+            reconnect
           </button>
           <span className="dim">
-            heartbeat раз в 20 секунд приходит SSE-комментарием и в журнал не попадает — это
-            нормально, признак живого соединения здесь только статус
+            the heartbeat every 20 seconds arrives as an SSE comment and never reaches the log —
+            that is normal; here the only sign of a live connection is the status
           </span>
         </div>
       </section>
 
       <section className="card">
-        {log.length === 0 && <p className="dim">пока ничего не приходило</p>}
+        {log.length === 0 && <p className="dim">nothing has arrived yet</p>}
         <table className="log">
           <tbody>
             {log.map((e, i) => (
@@ -1635,13 +1639,13 @@ export default function Debug() {
 }
 ```
 
-- [ ] **Step 4: Проверить руками**
+- [ ] **Step 4: Check it by hand**
 
-`npm run dev`, войти как зритель, открыть `/debug`.
+`npm run dev`, sign in as the viewer, open `/debug`.
 
-Expected: статус `open` зелёным. В логе бэкенда не должно быть 401. Если статус `closed` — проверить, что бэкенд запущен и что порт стенда именно 3000 (иначе CORS отклонит запрос с credentials).
+Expected: the status `open` in green. There should be no 401 in the backend log. If the status is `closed`, check that the backend is running and that the harness port really is 3000 (otherwise CORS rejects a request carrying credentials).
 
-- [ ] **Step 5: Коммит**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -1650,7 +1654,7 @@ git commit -m "feat: SSE stream context and the debug log"
 
 ---
 
-## Task 8: Прямая загрузка ассетов
+## Task 8: Direct asset upload
 
 **Files:**
 - Create: `lib/upload.ts`
@@ -1660,7 +1664,7 @@ git commit -m "feat: SSE stream context and the debug log"
 - Consumes: `api`, `send`, `UploadInitResponse`, `AssetResponse`, `AssetType`.
 - Produces: `planParts(file, partSize): Blob[]`, `uploadAsset(file, type, onProgress, onStart?): Promise<AssetResponse>`, `cancelUpload(assetId)`, `uploadSmall(file, type)`.
 
-- [ ] **Step 1: Написать падающие тесты нарезки**
+- [ ] **Step 1: Write the failing tests for the slicing**
 
 `lib/upload.test.ts`:
 
@@ -1695,12 +1699,12 @@ describe("planParts", () => {
 });
 ```
 
-- [ ] **Step 2: Запустить и убедиться в падении**
+- [ ] **Step 2: Run it and confirm it fails**
 
 Run: `npm test`
-Expected: FAIL — `./upload` не существует.
+Expected: FAIL — `./upload` does not exist.
 
-- [ ] **Step 3: Реализовать загрузку**
+- [ ] **Step 3: Implement the upload**
 
 `lib/upload.ts`:
 
@@ -1816,12 +1820,12 @@ export function uploadSmall(file: File, type: AssetType): Promise<AssetResponse>
 }
 ```
 
-- [ ] **Step 4: Запустить и убедиться в прохождении**
+- [ ] **Step 4: Run it and confirm it passes**
 
 Run: `npm test`
-Expected: PASS, 13 тестов.
+Expected: PASS, 13 tests.
 
-- [ ] **Step 5: Коммит**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add lib
@@ -1830,16 +1834,16 @@ git commit -m "feat: direct three-step asset upload"
 
 ---
 
-## Task 9: Студия автора
+## Task 9: The creator studio
 
 **Files:**
 - Create: `app/studio/page.tsx`
 
 **Interfaces:**
 - Consumes: `api`, `send`, `uploadAsset`, `uploadSmall`, `cancelUpload`, `useSession`, `PersonaResponse`, `AssetResponse`, `Page`.
-- Produces: экран `/studio`.
+- Produces: the `/studio` screen.
 
-- [ ] **Step 1: Написать экран**
+- [ ] **Step 1: Write the screen**
 
 `app/studio/page.tsx`:
 
@@ -1858,18 +1862,19 @@ export default function Studio() {
   const { user } = useSession();
   const [err, setErr] = useState<ApiError | null>(null);
 
-  if (!user) return <main><p className="dim">Сначала войдите.</p></main>;
+  if (!user) return <main><p className="dim">Sign in first.</p></main>;
 
   return (
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
-      <h1>Студия автора</h1>
+      <h1>Creator studio</h1>
       {user.role !== "CREATOR" && (
         <section className="card">
           <p className="dim">
-            Вы вошли как {user.role}. Загрузка и персона закрыты <span className="mono">@PreAuthorize</span>,
-            и бэкенд намеренно отвечает глухим <span className="mono">403 access denied</span> — причину
-            он пишет только в свой лог. Это не поломка стенда: нажмите «стать автором» на главной.
+            You are signed in as {user.role}. Uploads and the persona are gated by{" "}
+            <span className="mono">@PreAuthorize</span>, and the backend deliberately answers with a
+            blank <span className="mono">403 access denied</span> — it writes the reason to its own
+            log only. This is not the harness breaking: press “become a creator” on the home page.
           </p>
         </section>
       )}
@@ -1928,22 +1933,22 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
 
   return (
     <section className="card">
-      <h2>Персона</h2>
+      <h2>Persona</h2>
       <p className="dim">
-        Без включённой персоны AI не отвечает вообще: <span className="mono">AiReplyService</span> выходит
-        сразу, если <span className="mono">findByCreatorIdAndEnabledTrue</span> ничего не нашёл.
+        With no enabled persona the AI does not reply at all: <span className="mono">AiReplyService</span>{" "}
+        returns immediately when <span className="mono">findByCreatorIdAndEnabledTrue</span> finds nothing.
       </p>
-      <label>отображаемое имя *</label>
+      <label>display name *</label>
       <input {...field("displayName")} />
-      <label>описание характера</label>
+      <label>character description</label>
       <textarea {...field("description")} />
-      <label>тон и стиль</label>
+      <label>tone and style</label>
       <textarea {...field("tonality")} />
-      <label>любимые темы</label>
+      <label>favourite topics</label>
       <textarea {...field("topics")} />
-      <label>запретные темы (жёсткие границы)</label>
+      <label>forbidden topics (hard boundaries)</label>
       <textarea {...field("boundaries")} />
-      <label>приветствие (первое сообщение AI при открытии диалога)</label>
+      <label>greeting (the first AI message when a conversation opens)</label>
       <textarea {...field("greeting")} />
       <div className="row" style={{ marginTop: ".6rem" }}>
         <label className="row" style={{ width: "auto", gap: ".3rem" }}>
@@ -1953,9 +1958,9 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
             checked={!!form.enabled}
             onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
           />
-          включена
+          enabled
         </label>
-        <span className="dim">аватар: {form.avatarAssetId ?? "нет"}</span>
+        <span className="dim">avatar: {form.avatarAssetId ?? "none"}</span>
         <input
           type="file"
           accept="image/*"
@@ -1965,7 +1970,7 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
         />
       </div>
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить персону</button>
+        <button onClick={() => void save()}>save persona</button>
       </div>
       {saved && <RawJson value={saved} label="GET /api/persona" />}
     </section>
@@ -1986,16 +1991,16 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
   useEffect(load, [load]);
 
   async function pick(file: File) {
-    setProgress("план…");
+    setProgress("plan…");
     try {
       const asset = await uploadAsset(
         file,
         "VIDEO",
-        (done, total) => setProgress(`часть ${done}/${total}`),
+        (done, total) => setProgress(`part ${done}/${total}`),
         // the asset row exists from here on: a half-finished upload can be aborted
         (assetId) => setPending(assetId),
       );
-      setProgress(`готово: #${asset.id}, статус ${asset.status}`);
+      setProgress(`done: #${asset.id}, status ${asset.status}`);
       setPending(null);
       load();
     } catch (e) {
@@ -2009,10 +2014,10 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
   return (
     <>
       <section className="card">
-        <h2>Загрузка видео</h2>
+        <h2>Video upload</h2>
         <p className="dim">
-          Три шага: план с подписанными URL → PUT частей по 8 МБ → complete с ETag. В дев-режиме
-          файлы ложатся на диск тем же путём, что в проде — в R2.
+          Three steps: a plan with signed URLs → PUT of 8 MB parts → complete with the ETags. In dev
+          mode the files land on disk through the same path that goes to R2 in production.
         </p>
         <input
           type="file"
@@ -2022,14 +2027,14 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
         {progress && <p className="mono">{progress}</p>}
         {pending && (
           <button className="ghost" onClick={() => void cancelUpload(pending).then(load)}>
-            отменить загрузку #{pending}
+            cancel upload #{pending}
           </button>
         )}
       </section>
 
       <section className="card">
-        <h2>Мои ассеты</h2>
-        {assets.length === 0 && <p className="dim">пусто</p>}
+        <h2>My assets</h2>
+        {assets.length === 0 && <p className="dim">empty</p>}
         {assets.map((a) => (
           <AssetRow key={a.id} asset={a} onChanged={load} onError={onError} />
         ))}
@@ -2091,41 +2096,41 @@ function AssetRow({
         #{asset.id} · {asset.type} · {asset.status} · {asset.moderationState}
       </p>
       {asset.fileUrl && asset.status === "ACTIVE" && <video src={asset.fileUrl} controls preload="metadata" />}
-      <label>заголовок</label>
+      <label>title</label>
       <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      <label>теги</label>
+      <label>tags</label>
       <input value={tags} onChange={(e) => setTags(e.target.value)} />
-      <label>aiContext — что персона знает про этот клип</label>
+      <label>aiContext — what the persona knows about this clip</label>
       <textarea value={aiContext} onChange={(e) => setAiContext(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить метаданные</button>
+        <button onClick={() => void save()}>save metadata</button>
         <button className="ghost" onClick={() => void reload()}>
-          перечитать одним запросом
+          re-read with a single request
         </button>
         <button className="ghost" onClick={() => void remove()}>
-          удалить
+          delete
         </button>
       </div>
-      <RawJson value={asset} label="строка из GET /api/content" />
+      <RawJson value={asset} label="row from GET /api/content" />
       {fetched && <RawJson value={fetched} label={`GET /api/content/${asset.id}`} />}
     </div>
   );
 }
 ```
 
-- [ ] **Step 2: Проверить руками**
+- [ ] **Step 2: Check it by hand**
 
-Войти автором (инкогнито или на главной), открыть `/studio`:
+Sign in as the creator (in incognito or on the home page) and open `/studio`:
 
-1. персона подгрузилась из seed (`Anna`), правка сохраняется;
-2. загрузить mp4 из папки `Toc2meBack/video/` → прогресс по частям → статус `ACTIVE` и `fileUrl`;
-3. видео проигрывается в `<video>` — значит подписанный URL работает без заголовка `Authorization`;
-4. заполнить `aiContext` — например «Съёмка в танцевальной студии в Вене, февраль, репетиция перед конкурсом»; сохранить;
-5. загрузить картинку в аватар → в поле появился id, «сохранить персону» → 200.
+1. the persona loaded from the seed (`Anna`), and an edit saves;
+2. upload an mp4 from the `Toc2meBack/video/` folder → per-part progress → the `ACTIVE` status and a `fileUrl`;
+3. the video plays in `<video>` — which means the signed URL works without an `Authorization` header;
+4. fill in `aiContext` — for example “Filmed in a dance studio in Vienna, February, a rehearsal before a competition”; save;
+5. upload an image as the avatar → an id appears in the field, “save persona” → 200.
 
-Expected: все пять. Если PUT части падает с «no ETag header» — бэкенд не отдаёт `ETag` в `exposedHeaders`; проверить `SecurityConfig.corsConfigurationSource`.
+Expected: all five. If a part's PUT fails with “no ETag header”, the backend is not exposing `ETag` in `exposedHeaders`; check `SecurityConfig.corsConfigurationSource`.
 
-- [ ] **Step 3: Коммит**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add -A
@@ -2134,18 +2139,18 @@ git commit -m "feat: creator studio — persona, upload, asset metadata"
 
 ---
 
-## Task 10: Лента
+## Task 10: The feed
 
 **Files:**
 - Create: `app/feed/page.tsx`, `lib/seen-assets.ts`
 
 **Interfaces:**
 - Consumes: `api`, `send`, `AssetResponse`, `Page`, `SwipeResponse`, `FavoriteCreatorResponse`.
-- Produces: экран `/feed`; `rememberAsset(asset)`, `seenAssets(): AssetResponse[]`.
+- Produces: the `/feed` screen; `rememberAsset(asset)`, `seenAssets(): AssetResponse[]`.
 
-- [ ] **Step 1: Память об увиденных клипах**
+- [ ] **Step 1: Memory of the clips already seen**
 
-Зачем: чтобы приложить клип к сообщению, нужен его `assetId`, а `GET /api/content` отдаёт только **свои** ассеты. Клипы чужого автора клиент видит лишь в ленте — значит их надо запомнить там.
+Why: attaching a clip to a message needs its `assetId`, and `GET /api/content` only returns your **own** assets. The client sees another creator's clips in the feed alone — so that is where they have to be remembered.
 
 `lib/seen-assets.ts`:
 
@@ -2177,7 +2182,7 @@ export function seenAssets(): AssetResponse[] {
 }
 ```
 
-- [ ] **Step 2: Экран ленты**
+- [ ] **Step 2: The feed screen**
 
 `app/feed/page.tsx`:
 
@@ -2234,7 +2239,7 @@ export default function Feed() {
         assetId: current.id,
         direction,
       });
-      setNote(res.creatorFavorited ? "автор добавлен в избранное" : `свайп ${direction} записан`);
+      setNote(res.creatorFavorited ? "creator added to favourites" : `swipe ${direction} recorded`);
       if (direction === "SAVE") loadFavorites();
     } catch (e) {
       // swiping the same asset twice is a 400 by design — show it, do not treat it as a crash
@@ -2260,31 +2265,32 @@ export default function Feed() {
   return (
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
-      <h1>Лента</h1>
+      <h1>Feed</h1>
 
       <section className="card">
         {!current ? (
           <p className="dim">
-            Клипы закончились. Лента отдаёт только чужие видео в статусе ACTIVE — залейте их
-            автором в «Студии» или прогоните <span className="mono">scripts/seed_videos.sh</span>.
+            No clips left. The feed only serves videos from other creators in the ACTIVE status — upload
+            some as a creator in the Studio or run{" "}
+            <span className="mono">scripts/seed_videos.sh</span>.
           </p>
         ) : (
           <>
             <p className="mono">
-              #{current.id} · автор #{current.creatorId} ·{" "}
-              {current.creatorDisplayName ?? "без имени"}
+              #{current.id} · creator #{current.creatorId} ·{" "}
+              {current.creatorDisplayName ?? "unnamed"}
             </p>
             {current.fileUrl && <video src={current.fileUrl} controls autoPlay muted />}
-            <p>{current.title ?? <span className="dim">без заголовка</span>}</p>
+            <p>{current.title ?? <span className="dim">no title</span>}</p>
             {current.aiContext && (
               <p className="dim">aiContext: {current.aiContext}</p>
             )}
             <div className="row">
-              <button onClick={() => void swipe("SAVE")}>сохранить</button>
+              <button onClick={() => void swipe("SAVE")}>save</button>
               <button className="ghost" onClick={() => void swipe("SKIP")}>
-                пропустить
+                skip
               </button>
-              <button onClick={() => void write()}>написать автору об этом клипе</button>
+              <button onClick={() => void write()}>message the creator about this clip</button>
             </div>
             {note && <p className="dim">{note}</p>}
             <RawJson value={current} />
@@ -2293,8 +2299,8 @@ export default function Feed() {
       </section>
 
       <section className="card">
-        <h2>Избранные авторы</h2>
-        {favorites.length === 0 && <p className="dim">пока никого</p>}
+        <h2>Favourite creators</h2>
+        {favorites.length === 0 && <p className="dim">nobody yet</p>}
         <ul>
           {favorites.map((f) => (
             <li key={f.creatorId} className="mono">
@@ -2308,18 +2314,18 @@ export default function Feed() {
 }
 ```
 
-- [ ] **Step 3: Проверить руками**
+- [ ] **Step 3: Check it by hand**
 
-Войти зрителем, открыть `/feed`:
+Sign in as the viewer and open `/feed`:
 
-1. видео автора играет;
-2. «сохранить» → надпись про избранное, автор появился в списке ниже;
-3. повторный свайп по тому же клипу (вернуться назад по индексу не даст — проверить перезагрузкой страницы и свайпом того же первого клипа) → красная полоса `400 already swiped on this asset`, стенд продолжает работать;
-4. «написать автору об этом клипе» → переход на `/chats/N?assetId=M`.
+1. the creator's video plays;
+2. “save” → the favourites note appears and the creator shows up in the list below;
+3. swiping the same clip twice (stepping back through the index is not possible — check it by reloading the page and swiping the same first clip) → a red bar reading `400 already swiped on this asset`, and the harness keeps working;
+4. “message the creator about this clip” → navigation to `/chats/N?assetId=M`.
 
-Expected: все четыре.
+Expected: all four.
 
-- [ ] **Step 4: Коммит**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add -A
@@ -2328,16 +2334,16 @@ git commit -m "feat: feed with swipes, favorites and conversation start"
 
 ---
 
-## Task 11: Список диалогов
+## Task 11: The conversation list
 
 **Files:**
 - Create: `app/chats/page.tsx`
 
 **Interfaces:**
 - Consumes: `api`, `ConversationResponse`, `Page`, `useStream`.
-- Produces: экран `/chats`.
+- Produces: the `/chats` screen.
 
-- [ ] **Step 1: Написать экран**
+- [ ] **Step 1: Write the screen**
 
 `app/chats/page.tsx`:
 
@@ -2373,25 +2379,25 @@ export default function Chats() {
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <h1>
-        Диалоги <span className={`status ${status}`}>стрим {status}</span>
+        Conversations <span className={`status ${status}`}>stream {status}</span>
       </h1>
       <section className="card">
-        {items.length === 0 && <p className="dim">пусто — начните из ленты</p>}
+        {items.length === 0 && <p className="dim">empty — start one from the feed</p>}
         {items.map((c) => (
           <p key={c.id} style={{ borderTop: "1px solid var(--line)", paddingTop: ".6rem" }}>
             <Link href={`/chats/${c.id}`}>
-              {c.partnerDisplayName ?? c.partnerName ?? `партнёр #${c.partnerId}`}
+              {c.partnerDisplayName ?? c.partnerName ?? `partner #${c.partnerId}`}
             </Link>{" "}
             {c.personaEnabled ? (
               <span className="mono" style={{ color: "var(--accent)" }}>
                 AI
               </span>
             ) : (
-              <span className="mono dim">без AI</span>
+              <span className="mono dim">no AI</span>
             )}
-            {c.unreadCount > 0 && <span className="mono"> · непрочитано {c.unreadCount}</span>}
+            {c.unreadCount > 0 && <span className="mono"> · unread {c.unreadCount}</span>}
             <br />
-            <span className="dim">{c.lastMessage ?? "нет сообщений"}</span>
+            <span className="dim">{c.lastMessage ?? "no messages"}</span>
           </p>
         ))}
         <RawJson value={items} label="GET /api/chat/conversations" />
@@ -2401,11 +2407,11 @@ export default function Chats() {
 }
 ```
 
-- [ ] **Step 2: Проверить руками**
+- [ ] **Step 2: Check it by hand**
 
-Expected: в окне зрителя диалог виден с бейджем `AI` (персона включена в seed) и с приветствием персоны в `lastMessage`. В окне автора — тот же диалог, партнёр — зритель, бейдж `без AI` (персона принадлежит автору, а не партнёру).
+Expected: in the viewer's window the conversation shows an `AI` badge (the persona is enabled in the seed) and the persona's greeting in `lastMessage`. In the creator's window it is the same conversation, the partner is the viewer, and the badge reads `no AI` (the persona belongs to the creator, not to the partner).
 
-- [ ] **Step 3: Коммит**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add -A
@@ -2414,18 +2420,18 @@ git commit -m "feat: conversation list"
 
 ---
 
-## Task 12: Переписка
+## Task 12: The messaging screen
 
-Главный экран стенда: здесь видно и стрим токенов, и контекст клипа, и системные сообщения.
+The harness's main screen: this is where the token stream, the clip context and the system messages are all visible.
 
 **Files:**
 - Create: `app/chats/[id]/page.tsx`
 
 **Interfaces:**
 - Consumes: `api`, `send`, `useSession`, `useStream`, `emptyState`, `reduce`, `withHistory`, `seenAssets`, `MessageResponse`, `Page`.
-- Produces: экран `/chats/[id]`.
+- Produces: the `/chats/[id]` screen.
 
-- [ ] **Step 1: Написать экран**
+- [ ] **Step 1: Write the screen**
 
 `app/chats/[id]/page.tsx`:
 
@@ -2448,9 +2454,9 @@ import { RawJson } from "@/components/RawJson";
 export const dynamic = "force-dynamic";
 
 const REASONS: Record<string, string> = {
-  ai_unavailable: "Ключ OpenAI не настроен — персона не ответит. Проверьте OPENAI_API_KEY.",
-  rate_limited: "Потолок ответов на диалог — 12 в минуту. Подождите минуту.",
-  internal: "Генерация упала. Смотрите лог бэкенда.",
+  ai_unavailable: "The OpenAI key is not configured — the persona will not reply. Check OPENAI_API_KEY.",
+  rate_limited: "The cap is 12 replies per conversation per minute. Wait a minute.",
+  internal: "Generation failed. Check the backend log.",
 };
 
 export default function Chat() {
@@ -2511,15 +2517,15 @@ export default function Chat() {
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <h1>
-        {conversation?.partnerDisplayName ?? `Диалог #${conversationId}`}{" "}
+        {conversation?.partnerDisplayName ?? `Conversation #${conversationId}`}{" "}
         {conversation?.personaEnabled ? (
           <span className="mono" style={{ color: "var(--accent)" }}>
             AI
           </span>
         ) : (
-          <span className="mono dim">без AI</span>
+          <span className="mono dim">no AI</span>
         )}
-        <span className={`status ${status}`}> · стрим {status}</span>
+        <span className={`status ${status}`}> · stream {status}</span>
       </h1>
 
       {state.banner && (
@@ -2535,7 +2541,7 @@ export default function Chat() {
               {m.body}
               <div className="meta">
                 {m.senderType}
-                {m.contextAssetId ? ` · из клипа #${m.contextAssetId}` : ""}
+                {m.contextAssetId ? ` · from clip #${m.contextAssetId}` : ""}
                 {` · ${new Date(m.createdAt).toLocaleTimeString()}`}
               </div>
             </div>
@@ -2543,14 +2549,14 @@ export default function Chat() {
           {drafts.map(([replyId, text]) => (
             <div key={replyId} className="bubble draft">
               {text || "…"}
-              <div className="meta">персона печатает · {replyId}</div>
+              <div className="meta">the persona is typing · {replyId}</div>
             </div>
           ))}
         </div>
       </section>
 
       <section className="card">
-        <label>сообщение</label>
+        <label>message</label>
         <textarea
           value={body}
           maxLength={4000}
@@ -2562,9 +2568,9 @@ export default function Chat() {
             }
           }}
         />
-        <label>контекст: клип, о котором речь</label>
+        <label>context: the clip being discussed</label>
         <select value={assetId} onChange={(e) => setAssetId(e.target.value)}>
-          <option value="">без контекста</option>
+          <option value="">no context</option>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
               #{a.id} {a.title ?? a.type}
@@ -2572,20 +2578,20 @@ export default function Chat() {
           ))}
         </select>
         <div className="row" style={{ marginTop: ".6rem" }}>
-          <button onClick={() => void sendMessage()}>отправить</button>
+          <button onClick={() => void sendMessage()}>send</button>
           <span className="dim">
-            контекст хранится на каждом сообщении, поэтому его можно менять посреди разговора
+            the context is stored on every message, so it can be changed mid-conversation
           </span>
         </div>
       </section>
 
       <section className="card">
         <p className="dim">
-          Автор, написавший сюда сам, AI не запускает — это правило бэкенда: пишет человек, значит
-          человек и вмешался. Токены приходят только зрителю, поэтому в окне автора ответ персоны
-          появляется целиком.
+          A creator writing here in person does not trigger the AI — that is a backend rule: if a
+          human writes, a human has stepped in. Tokens are only delivered to the viewer, so in the
+          creator window the reply from the persona appears all at once.
         </p>
-        <RawJson value={state} label="состояние экрана" />
+        <RawJson value={state} label="screen state" />
       </section>
     </main>
   );
@@ -2598,27 +2604,27 @@ function bubbleClass(m: MessageResponse, myId: number | undefined): string {
 }
 ```
 
-- [ ] **Step 2: Проверить главный сценарий**
+- [ ] **Step 2: Check the main scenario**
 
-Два окна: обычное — зритель, инкогнито — автор. Бэкенд с `OPENAI_API_KEY`.
+Two windows: the normal one is the viewer, incognito is the creator. The backend has `OPENAI_API_KEY` set.
 
-1. зритель из ленты пишет «где это снято?» с выбранным клипом;
-2. в окне зрителя: пузырь своего сообщения, затем пунктирный черновик, набирающийся токенами, затем он сменяется готовым сообщением персоны;
-3. в окне автора: оба сообщения появляются сами, без перезагрузки, ответ персоны — целиком;
-4. под сообщением зрителя написано «из клипа #M»;
-5. в ответе персоны видно знание `aiContext` — она упоминает Вену и репетицию;
-6. автор пишет в тот же диалог — второго ответа AI **не** появляется;
-7. `/debug` показывает всю последовательность: `message`, `reply-start`, `token`×N, `reply-end`, `message`.
+1. from the feed, the viewer writes “where was this filmed?” with a clip selected;
+2. in the viewer's window: a bubble with their own message, then a dashed draft filling up token by token, then the draft is replaced by the persona's finished message;
+3. in the creator's window: both messages appear on their own, without a reload, and the persona's reply arrives whole;
+4. under the viewer's message it reads “from clip #M”;
+5. the persona's reply shows knowledge of `aiContext` — it mentions Vienna and the rehearsal;
+6. the creator writes into the same conversation — a second AI reply does **not** appear;
+7. `/debug` shows the whole sequence: `message`, `reply-start`, `token`×N, `reply-end`, `message`.
 
-Expected: все семь. Если вместо ответа приходит жёлтая полоса `ai_unavailable` — ключ не задан; `rate_limited` — сработал потолок 12/мин.
+Expected: all seven. If a yellow `ai_unavailable` bar arrives instead of a reply, the key is not set; `rate_limited` means the 12/min cap kicked in.
 
-- [ ] **Step 3: Проверить отказ персоны**
+- [ ] **Step 3: Check the persona's refusal**
 
-Написать на тему из `boundaries` персоны (в seed — «политика»).
+Write on a topic from the persona's `boundaries` (in the seed, “politics”).
 
-Expected: черновик снимается, приходит системное сообщение пунктирной плашкой по центру (текст из `ai.chat.refusal-message`), а не реплика персоны.
+Expected: the draft is retired and a system message arrives as a dashed banner in the centre (the text from `ai.chat.refusal-message`), not a persona reply.
 
-- [ ] **Step 4: Коммит**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add -A
@@ -2627,64 +2633,64 @@ git commit -m "feat: conversation screen with streamed replies and clip context"
 
 ---
 
-## Task 13: README и чеклист для клиента
+## Task 13: The README and the client's checklist
 
-Без этого стенд не работает: клиент не догадается про инкогнито и решит, что вход сломан.
+Without it the harness does not work: the client will not think of incognito and will conclude that sign-in is broken.
 
 **Files:**
 - Create: `README.md`
 
-- [ ] **Step 1: Написать README**
+- [ ] **Step 1: Write the README**
 
 `README.md`:
 
 ```markdown
-# Toc2me — тестовый стенд
+# Toc2me — test harness
 
-Локальный стенд для проверки чата: переписка зритель↔автор, ответы AI-персоны, видео-контекст.
+A local harness for exercising the chat: viewer↔creator messaging, AI-persona replies, video context.
 
-## Главное про две личности
+## The key thing about the two identities
 
-Кука сессии одна на хост, поэтому **две личности — это два окна браузера**:
+The session cookie is per host, so **two identities means two browser windows**:
 
-- обычное окно — зритель (`user@demo.local`);
-- окно инкогнито — автор (`creator@demo.local`).
+- a normal window — the viewer (`user@demo.local`);
+- an incognito window — the creator (`creator@demo.local`).
 
-Пароль у обоих: `demo1234`. В двух обычных окнах второй вход перезатрёт первый, и будет
-казаться, что стенд сломан. Выхода нет намеренно: в бэкенде нет `/auth/logout`, а кука
-`httpOnly` — полный выход делается очисткой кук в devtools.
+Both use the password `demo1234`. In two normal windows the second sign-in overwrites the first,
+and it will look as if the harness is broken. There is no sign-out on purpose: the backend has no
+`/auth/logout` and the cookie is `httpOnly` — a full sign-out means clearing cookies in devtools.
 
-## Запуск
+## Running it
 
-### 1. Бэкенд
+### 1. Backend
 
 ```bash
 cd ../Toc2meBack
-psql "$DATABASE_URL" -f scripts/migrations/001_asset_object_storage.sql   # на свежей базе
-psql "$DATABASE_URL" -f scripts/migrations/002_widen_upload_id.sql        # на свежей базе
-psql "$DATABASE_URL" -f scripts/seed-demo-users.sql                      # демо-аккаунты
-export OPENAI_API_KEY=sk-...                                             # без него AI молчит
+psql "$DATABASE_URL" -f scripts/migrations/001_asset_object_storage.sql   # on a fresh database
+psql "$DATABASE_URL" -f scripts/migrations/002_widen_upload_id.sql        # on a fresh database
+psql "$DATABASE_URL" -f scripts/seed-demo-users.sql                      # demo accounts
+export OPENAI_API_KEY=sk-...                                             # without it the AI is silent
 ./mvnw spring-boot:run
 ```
 
-Миграции обязательны: `ddl-auto` не переписывает CHECK-констрейнты, и статус `UPLOADING`
-без них отвергается базой.
+The migrations are mandatory: `ddl-auto` does not rewrite CHECK constraints, and without them the
+database rejects the `UPLOADING` status.
 
-Без `OPENAI_API_KEY` бин провайдера не создаётся, и каждое сообщение отвечает жёлтой
-плашкой `ai_unavailable`. Это правильное поведение, но проверять чат так нельзя.
+Without `OPENAI_API_KEY` the provider bean is never created, and every message is answered with a
+yellow `ai_unavailable` banner. That is the correct behaviour, but the chat cannot be tested that way.
 
-### 2. Стенд
+### 2. Harness
 
 ```bash
 npm install
 npm run dev
 ```
 
-Порт обязан быть **3000** — он прошит в CORS бэкенда (`app.cors.allowed-origins`).
+The port has to be **3000** — it is hardcoded in the backend's CORS config (`app.cors.allowed-origins`).
 
-### 3. Наполнить ленту
+### 3. Fill the feed
 
-Либо залить видео вручную в «Студии», либо скриптом бэкенда:
+Either upload videos by hand in the Studio, or use the backend's script:
 
 ```bash
 cd ../Toc2meBack
@@ -2692,54 +2698,54 @@ BASE_URL=http://localhost:8080 EMAIL=creator@demo.local PASSWORD=demo1234 \
   ./scripts/seed_videos.sh video
 ```
 
-## Чеклист проверки
+## Test checklist
 
-### Роли и вход
-- [ ] «войти как зритель» → в шапке `USER`, есть числовой id
-- [ ] «войти как автор» → `CREATOR`
-- [ ] зритель нажимает «стать автором» → роль сменилась, `/studio` открылась
-- [ ] профиль сохраняется, после «обновить» изменения на месте
-- [ ] интересы показываются и сохраняются
+### Roles and sign-in
+- [ ] “sign in as viewer” → `USER` in the header, with a numeric id
+- [ ] “sign in as creator” → `CREATOR`
+- [ ] the viewer presses “become a creator” → the role changes, `/studio` opens
+- [ ] the profile saves, and after “refresh” the changes are still there
+- [ ] interests are listed and save
 
-### Ассеты
-- [ ] загрузка mp4: прогресс по частям, в конце статус `ACTIVE`
-- [ ] видео проигрывается в `<video>` — подписанный URL работает без заголовка авторизации
-- [ ] `aiContext` сохраняется через «сохранить метаданные»
-- [ ] аватар персоны грузится и её id попадает в форму
-- [ ] удаление ассета убирает его из списка
+### Assets
+- [ ] mp4 upload: per-part progress, `ACTIVE` status at the end
+- [ ] the video plays in `<video>` — the signed URL works without an authorization header
+- [ ] `aiContext` saves via “save metadata”
+- [ ] the persona avatar uploads and its id lands in the form
+- [ ] deleting an asset removes it from the list
 
-### Лента
-- [ ] чужие клипы показываются, свои — нет
-- [ ] «сохранить» добавляет автора в избранное
-- [ ] повторный свайп по тому же клипу даёт `400`, стенд продолжает работать
+### Feed
+- [ ] other people's clips are shown, your own are not
+- [ ] “save” adds the creator to favourites
+- [ ] swiping the same clip twice returns `400`, and the harness keeps working
 
-### Чат — главное
-- [ ] диалог из ленты открывается сразу с приветствием персоны
-- [ ] у зрителя ответ персоны набирается токенами в пунктирном пузыре
-- [ ] у автора оба сообщения появляются без перезагрузки
-- [ ] под сообщением написано «из клипа #N»
-- [ ] персона в ответе опирается на `aiContext` клипа
-- [ ] автор пишет сам → второго ответа AI нет
-- [ ] сообщение на запретную тему → системная плашка вместо реплики персоны
-- [ ] непрочитанные считаются, после открытия диалога сбрасываются
+### Chat — the main part
+- [ ] a conversation opened from the feed starts with the persona's greeting right away
+- [ ] for the viewer, the persona's reply is typed out token by token in a dashed bubble
+- [ ] for the creator, both messages appear without a reload
+- [ ] the message footer reads “from clip #N”
+- [ ] the persona's reply draws on the clip's `aiContext`
+- [ ] the creator writes in person → there is no second AI reply
+- [ ] a message on a forbidden topic → a system banner instead of a persona reply
+- [ ] unread counts add up and reset once the conversation is opened
 
-### Ошибки видны
-- [ ] без `OPENAI_API_KEY` → плашка `ai_unavailable`, а не тишина
-- [ ] 13 сообщений за минуту → плашка `rate_limited`
-- [ ] `/studio` под ролью `USER` → `403 access denied` (бэкенд намеренно не объясняет причину, она в его логе)
-- [ ] `/debug` показывает всю последовательность событий
+### Errors are visible
+- [ ] without `OPENAI_API_KEY` → an `ai_unavailable` banner, not silence
+- [ ] 13 messages in a minute → a `rate_limited` banner
+- [ ] `/studio` under the `USER` role → `403 access denied` (the backend deliberately does not explain why; the reason is in its log)
+- [ ] `/debug` shows the whole sequence of events
 
-## Что стенд не проверяет
+## What the harness does not cover
 
-Сброс пароля (нужен почтовый ящик), R2 и CDN (дев-режим держит файлы на диске),
-работу в нескольких инстансах (реестр SSE-подключений живёт в памяти процесса).
+Password reset (needs a mailbox), R2 and the CDN (dev mode keeps files on disk), running across
+several instances (the registry of SSE connections lives in the process's memory).
 ```
 
-- [ ] **Step 2: Пройти чеклист целиком**
+- [ ] **Step 2: Walk the whole checklist**
 
-Expected: все пункты отмечены. Любой незакрытый — либо баг стенда, либо находка в бэкенде; во втором случае записать её и не править бэкенд в рамках этого плана.
+Expected: every item ticked. Anything left open is either a harness bug or a finding in the backend; in the second case write it down and do not fix the backend within this plan.
 
-- [ ] **Step 3: Финальная проверка и коммит**
+- [ ] **Step 3: Final check and commit**
 
 ```bash
 npm test
@@ -2748,24 +2754,24 @@ git add -A
 git commit -m "docs: harness README and manual test checklist"
 ```
 
-Expected: 13 тестов зелёные, сборка без ошибок.
+Expected: 13 tests green, the build with no errors.
 
 ---
 
-## Порядок выполнения
+## Order of execution
 
-Задачи идут по номерам. Task 1 и 2 — в репозитории `Toc2meBack`, остальные — в `Toc2me-Harness`.
+The tasks run in numeric order. Task 1 and 2 belong to the `Toc2meBack` repository, the rest to `Toc2me-Harness`.
 
-Зависимости: Task 5 требует Task 1 (`/me`) и Task 2 (аккаунты). Task 12 требует Task 6, 7 и 10 (`seen-assets`). Task 9 требует Task 8.
+Dependencies: Task 5 needs Task 1 (`/me`) and Task 2 (the accounts). Task 12 needs Tasks 6, 7 and 10 (`seen-assets`). Task 9 needs Task 8.
 
-## Что остаётся незакрытым
+## What stays open
 
-Не недоделки плана, а зафиксированные решения — они должны попасть в описание PR:
+Not loose ends of the plan but recorded decisions — they belong in the PR description:
 
-- сброс пароля не покрыт: нужен почтовый ящик, а при seed-аккаунтах путь бессмысленен;
-- в бэкенде нет `/auth/logout`, полный выход делается очисткой кук;
-- нет эндпоинта, отдающего ассеты чужого автора, поэтому контекст клипа в чате берётся из
-  того, что зритель видел в ленте (`sessionStorage`);
-- стенд работает только против одного инстанса бэкенда;
-- в `application-dev.yml:19` по-прежнему лежит рабочий Gmail app-password — его надо
-  отозвать отдельным коммитом, стенд этого не касается.
+- password reset is not covered: it needs a mailbox, and with seeded accounts the path is pointless;
+- the backend has no `/auth/logout`, so a full sign-out means clearing cookies;
+- there is no endpoint that serves another creator's assets, so the clip context in the chat comes
+  from what the viewer saw in the feed (`sessionStorage`);
+- the harness only works against a single backend instance;
+- `application-dev.yml:19` still holds a working Gmail app password — it has to be revoked in a
+  separate commit, which is outside the harness's scope.

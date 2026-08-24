@@ -38,10 +38,10 @@ describe("reduce", () => {
 
   it("accumulates tokens into a draft", () => {
     let s = reduce(emptyState(7), start);
-    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "В " } });
-    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "Вене" } });
+    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "In " } });
+    s = reduce(s, { event: "token", data: { conversationId: 7, replyId: "a1", delta: "Vienna" } });
 
-    expect(s.drafts.a1).toBe("В Вене");
+    expect(s.drafts.a1).toBe("In Vienna");
   });
 
   it("retires the draft on reply-end", () => {

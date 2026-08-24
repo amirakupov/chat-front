@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { API } from "./api";
-import { EV_NAMES, type StreamEvent } from "./events";
+import { EV_NAMES, eventPayload, type StreamEvent } from "./events";
 import { useSession } from "./session";
 
 export type LogEntry = { at: number; event: string; data: unknown };
@@ -54,18 +54,21 @@ export function StreamProvider({ children }: { children: React.ReactNode }) {
     es.onerror = () => setStatus("closed");
 
     const handlers = EV_NAMES.map((name) => {
-      const handler = (raw: MessageEvent) => {
-        const data = JSON.parse(raw.data);
+      const handler = (raw: Event) => {
+        // a data-less event is EventSource reporting a dropped connection under the same name
+        // the backend uses for a failed reply; es.onerror already turned that into a status
+        const data = eventPayload(raw);
+        if (data === undefined) return;
         setLog((l) => [{ at: Date.now(), event: name, data }, ...l].slice(0, LOG_LIMIT));
         const ev = { event: name, data } as StreamEvent;
         listeners.current.forEach((l) => l(ev));
       };
-      es.addEventListener(name, handler as EventListener);
+      es.addEventListener(name, handler);
       return { name, handler };
     });
 
     return () => {
-      handlers.forEach(({ name, handler }) => es.removeEventListener(name, handler as EventListener));
+      handlers.forEach(({ name, handler }) => es.removeEventListener(name, handler));
       es.close();
       setStatus("closed");
     };

@@ -28,25 +28,25 @@ export default function Chats() {
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <h1>
-        Диалоги <span className={`status ${status}`}>стрим {status}</span>
+        Conversations <span className={`status ${status}`}>stream {status}</span>
       </h1>
       <section className="card">
-        {items.length === 0 && <p className="dim">пусто — начните из ленты</p>}
+        {items.length === 0 && <p className="dim">empty — start one from the feed</p>}
         {items.map((c) => (
           <p key={c.id} style={{ borderTop: "1px solid var(--line)", paddingTop: ".6rem" }}>
             <Link href={`/chats/${c.id}`}>
-              {c.partnerDisplayName ?? c.partnerName ?? `партнёр #${c.partnerId}`}
+              {c.partnerDisplayName ?? c.partnerName ?? `partner #${c.partnerId}`}
             </Link>{" "}
             {c.personaEnabled ? (
               <span className="mono" style={{ color: "var(--accent)" }}>
                 AI
               </span>
             ) : (
-              <span className="mono dim">без AI</span>
+              <span className="mono dim">no AI</span>
             )}
-            {c.unreadCount > 0 && <span className="mono"> · непрочитано {c.unreadCount}</span>}
+            {c.unreadCount > 0 && <span className="mono"> · unread {c.unreadCount}</span>}
             <br />
-            <span className="dim">{c.lastMessage ?? "нет сообщений"}</span>
+            <span className="dim">{c.lastMessage ?? "no messages"}</span>
           </p>
         ))}
         <RawJson value={items} label="GET /api/chat/conversations" />

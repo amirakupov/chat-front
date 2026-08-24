@@ -7,22 +7,22 @@ export default function Debug() {
 
   return (
     <main>
-      <h1>Журнал стрима</h1>
+      <h1>Stream log</h1>
       <section className="card">
         <div className="row">
           <span className={`status ${status}`}>GET /api/chat/stream — {status}</span>
           <button className="ghost" onClick={reconnect}>
-            переподключить
+            reconnect
           </button>
           <span className="dim">
-            heartbeat раз в 20 секунд приходит SSE-комментарием и в журнал не попадает — это
-            нормально, признак живого соединения здесь только статус
+            the heartbeat every 20 seconds arrives as an SSE comment and never reaches the log —
+            that is normal; here the only sign of a live connection is the status
           </span>
         </div>
       </section>
 
       <section className="card">
-        {log.length === 0 && <p className="dim">пока ничего не приходило</p>}
+        {log.length === 0 && <p className="dim">nothing has arrived yet</p>}
         <table className="log">
           <tbody>
             {log.map((e, i) => (

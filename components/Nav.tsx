@@ -7,13 +7,13 @@ export function Nav() {
   const { user } = useSession();
   return (
     <nav className="top">
-      <Link href="/">вход</Link>
-      <Link href="/feed">лента</Link>
-      <Link href="/studio">студия</Link>
-      <Link href="/chats">чаты</Link>
+      <Link href="/">sign in</Link>
+      <Link href="/feed">feed</Link>
+      <Link href="/studio">studio</Link>
+      <Link href="/chats">chats</Link>
       <Link href="/debug">debug</Link>
       <span className="who">
-        {user ? `#${user.id} ${user.email} · ${user.role}` : "не в системе"}
+        {user ? `#${user.id} ${user.email} · ${user.role}` : "signed out"}
       </span>
     </nav>
   );

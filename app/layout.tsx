@@ -4,11 +4,11 @@ import { SessionProvider } from "@/lib/session";
 import { StreamProvider } from "@/lib/stream";
 import { Nav } from "@/components/Nav";
 
-export const metadata: Metadata = { title: "Toc2me — тестовый стенд" };
+export const metadata: Metadata = { title: "Toc2me — test harness" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru">
+    <html lang="en">
       <body>
         <SessionProvider>
           <StreamProvider>

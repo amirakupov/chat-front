@@ -1,4 +1,4 @@
-import { api, send } from "./api";
+import { api, send, storeUrl } from "./api";
 import type { AssetResponse, AssetType, PresignedPart, UploadInitResponse } from "./types";
 
 const CONCURRENCY = 3;
@@ -18,7 +18,7 @@ export function planParts(file: Blob, partSize: number): Blob[] {
 async function putPart(part: PresignedPart, body: Blob, contentType: string): Promise<string> {
   // Always send Content-Type: for a single-shot upload the store signed that header into
   // the URL and answers 403 for anything else; for multipart parts it is ignored.
-  const res = await fetch(part.url, {
+  const res = await fetch(storeUrl(part.url), {
     method: "PUT",
     headers: { "Content-Type": contentType },
     body,

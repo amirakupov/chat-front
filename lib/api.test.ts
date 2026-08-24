@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseError } from "./api";
+import { parseError, storeUrl } from "./api";
 
 describe("parseError", () => {
   it("passes through the ApiError the backend sends", () => {
@@ -29,5 +29,21 @@ describe("parseError", () => {
       error: "Bad Gateway",
       message: "Bad Gateway",
     });
+  });
+});
+
+describe("storeUrl", () => {
+  it("points a dev-mode relative URL at the backend, not at the harness", () => {
+    // LocalStorageService signs a path, so used as-is it would aim at :3000 — where no such
+    // route exists, by design
+    expect(storeUrl("/api/content/uploads/direct?key=a.mov&part=1&exp=1&sig=ff")).toBe(
+      "http://localhost:8080/api/content/uploads/direct?key=a.mov&part=1&exp=1&sig=ff",
+    );
+  });
+
+  it("leaves a presigned bucket URL alone", () => {
+    const r2 = "https://bucket.r2.cloudflarestorage.com/video/a.mov?X-Amz-Signature=ff";
+
+    expect(storeUrl(r2)).toBe(r2);
   });
 });

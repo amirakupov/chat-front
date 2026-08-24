@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, isApiError, send, type ApiError } from "@/lib/api";
+import { api, isApiError, send, storeUrl, type ApiError } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { cancelUpload, uploadAsset, uploadSmall } from "@/lib/upload";
 import type { AssetResponse, Page, PersonaRequest, PersonaResponse } from "@/lib/types";
@@ -12,18 +12,19 @@ export default function Studio() {
   const { user } = useSession();
   const [err, setErr] = useState<ApiError | null>(null);
 
-  if (!user) return <main><p className="dim">Сначала войдите.</p></main>;
+  if (!user) return <main><p className="dim">Sign in first.</p></main>;
 
   return (
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
-      <h1>Студия автора</h1>
+      <h1>Creator studio</h1>
       {user.role !== "CREATOR" && (
         <section className="card">
           <p className="dim">
-            Вы вошли как {user.role}. Загрузка и персона закрыты <span className="mono">@PreAuthorize</span>,
-            и бэкенд намеренно отвечает глухим <span className="mono">403 access denied</span> — причину
-            он пишет только в свой лог. Это не поломка стенда: нажмите «стать автором» на главной.
+            You are signed in as {user.role}. Uploads and the persona are gated by{" "}
+            <span className="mono">@PreAuthorize</span>, and the backend deliberately answers with a
+            blank <span className="mono">403 access denied</span> — it writes the reason to its own
+            log only. This is not the harness breaking: press “become a creator” on the home page.
           </p>
         </section>
       )}
@@ -82,22 +83,22 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
 
   return (
     <section className="card">
-      <h2>Персона</h2>
+      <h2>Persona</h2>
       <p className="dim">
-        Без включённой персоны AI не отвечает вообще: <span className="mono">AiReplyService</span> выходит
-        сразу, если <span className="mono">findByCreatorIdAndEnabledTrue</span> ничего не нашёл.
+        With no enabled persona the AI does not reply at all: <span className="mono">AiReplyService</span>{" "}
+        returns immediately when <span className="mono">findByCreatorIdAndEnabledTrue</span> finds nothing.
       </p>
-      <label>отображаемое имя *</label>
+      <label>display name *</label>
       <input {...field("displayName")} />
-      <label>описание характера</label>
+      <label>character description</label>
       <textarea {...field("description")} />
-      <label>тон и стиль</label>
+      <label>tone and style</label>
       <textarea {...field("tonality")} />
-      <label>любимые темы</label>
+      <label>favourite topics</label>
       <textarea {...field("topics")} />
-      <label>запретные темы (жёсткие границы)</label>
+      <label>forbidden topics (hard boundaries)</label>
       <textarea {...field("boundaries")} />
-      <label>приветствие (первое сообщение AI при открытии диалога)</label>
+      <label>greeting (the first AI message when a conversation opens)</label>
       <textarea {...field("greeting")} />
       <div className="row" style={{ marginTop: ".6rem" }}>
         <label className="row" style={{ width: "auto", gap: ".3rem" }}>
@@ -107,9 +108,9 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
             checked={!!form.enabled}
             onChange={(e) => setForm((f) => ({ ...f, enabled: e.target.checked }))}
           />
-          включена
+          enabled
         </label>
-        <span className="dim">аватар: {form.avatarAssetId ?? "нет"}</span>
+        <span className="dim">avatar: {form.avatarAssetId ?? "none"}</span>
         <input
           type="file"
           accept="image/*"
@@ -119,7 +120,7 @@ function Persona({ onError }: { onError: (e: ApiError) => void }) {
         />
       </div>
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить персону</button>
+        <button onClick={() => void save()}>save persona</button>
       </div>
       {saved && <RawJson value={saved} label="GET /api/persona" />}
     </section>
@@ -140,16 +141,16 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
   useEffect(load, [load]);
 
   async function pick(file: File) {
-    setProgress("план…");
+    setProgress("plan…");
     try {
       const asset = await uploadAsset(
         file,
         "VIDEO",
-        (done, total) => setProgress(`часть ${done}/${total}`),
+        (done, total) => setProgress(`part ${done}/${total}`),
         // the asset row exists from here on: a half-finished upload can be aborted
         (assetId) => setPending(assetId),
       );
-      setProgress(`готово: #${asset.id}, статус ${asset.status}`);
+      setProgress(`done: #${asset.id}, status ${asset.status}`);
       setPending(null);
       load();
     } catch (e) {
@@ -163,10 +164,10 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
   return (
     <>
       <section className="card">
-        <h2>Загрузка видео</h2>
+        <h2>Video upload</h2>
         <p className="dim">
-          Три шага: план с подписанными URL → PUT частей по 8 МБ → complete с ETag. В дев-режиме
-          файлы ложатся на диск тем же путём, что в проде — в R2.
+          Three steps: a plan with signed URLs → PUT of 8 MB parts → complete with the ETags. In dev
+          mode the files land on disk through the same path that goes to R2 in production.
         </p>
         <input
           type="file"
@@ -176,14 +177,14 @@ function Uploader({ onError }: { onError: (e: ApiError) => void }) {
         {progress && <p className="mono">{progress}</p>}
         {pending && (
           <button className="ghost" onClick={() => void cancelUpload(pending).then(load)}>
-            отменить загрузку #{pending}
+            cancel upload #{pending}
           </button>
         )}
       </section>
 
       <section className="card">
-        <h2>Мои ассеты</h2>
-        {assets.length === 0 && <p className="dim">пусто</p>}
+        <h2>My assets</h2>
+        {assets.length === 0 && <p className="dim">empty</p>}
         {assets.map((a) => (
           <AssetRow key={a.id} asset={a} onChanged={load} onError={onError} />
         ))}
@@ -244,23 +245,25 @@ function AssetRow({
       <p className="mono">
         #{asset.id} · {asset.type} · {asset.status} · {asset.moderationState}
       </p>
-      {asset.fileUrl && asset.status === "ACTIVE" && <video src={asset.fileUrl} controls preload="metadata" />}
-      <label>заголовок</label>
+      {asset.fileUrl && asset.status === "ACTIVE" && (
+        <video src={storeUrl(asset.fileUrl)} controls preload="metadata" />
+      )}
+      <label>title</label>
       <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      <label>теги</label>
+      <label>tags</label>
       <input value={tags} onChange={(e) => setTags(e.target.value)} />
-      <label>aiContext — что персона знает про этот клип</label>
+      <label>aiContext — what the persona knows about this clip</label>
       <textarea value={aiContext} onChange={(e) => setAiContext(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить метаданные</button>
+        <button onClick={() => void save()}>save metadata</button>
         <button className="ghost" onClick={() => void reload()}>
-          перечитать одним запросом
+          re-read with a single request
         </button>
         <button className="ghost" onClick={() => void remove()}>
-          удалить
+          delete
         </button>
       </div>
-      <RawJson value={asset} label="строка из GET /api/content" />
+      <RawJson value={asset} label="row from GET /api/content" />
       {fetched && <RawJson value={fetched} label={`GET /api/content/${asset.id}`} />}
     </div>
   );

@@ -1,5 +1,17 @@
 export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
+/**
+ * Where a URL the backend handed us actually points.
+ *
+ * R2 and the CDN sign absolute URLs; in dev `LocalStorageService` signs a path instead, so
+ * that client code need not branch on the environment. A path used as-is — in `fetch` or in
+ * `<video src>` — would resolve against the harness's own origin, :3000, which has no such
+ * route and answers 404.
+ */
+export function storeUrl(url: string): string {
+  return new URL(url, API).toString();
+}
+
 /** Exactly what GlobalExceptionHandler.build() produces. */
 export type ApiError = {
   status: number;

@@ -18,20 +18,20 @@ export default function Home() {
   return (
     <main>
       <ErrorBar error={error} onClear={clearError} />
-      <h1>Тестовый стенд Toc2me</h1>
+      <h1>Toc2me test harness</h1>
       <p className="dim">
-        Две личности — два окна: обычное для зрителя, инкогнито для автора. Кука одна на хост,
-        поэтому в двух обычных окнах вход перезатрёт сам себя.
+        Two identities — two windows: a normal one for the viewer, incognito for the creator. The
+        cookie is per host, so in two normal windows a sign-in overwrites itself.
       </p>
 
       <section className="card">
-        <h2>Вход</h2>
+        <h2>Sign in</h2>
         <div className="row">
           <button onClick={() => login(DEMO.user.email, DEMO.user.password)}>
-            войти как зритель
+            sign in as viewer
           </button>
           <button onClick={() => login(DEMO.creator.email, DEMO.creator.password)}>
-            войти как автор
+            sign in as creator
           </button>
         </div>
         <div className="grid2" style={{ marginTop: ".8rem" }}>
@@ -40,25 +40,26 @@ export default function Home() {
             <input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div>
-            <label>пароль</label>
+            <label>password</label>
             <input value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
         </div>
         <div className="row" style={{ marginTop: ".6rem" }}>
           <button className="ghost" onClick={() => login(email, password)}>
-            войти
+            sign in
           </button>
           <span className="dim">
-            выхода нет: в бэкенде нет /auth/logout, а кука httpOnly. Смена личности — вход под
-            другим аккаунтом; полный выход — очистить куки в devtools.
+            there is no sign-out: the backend has no /auth/logout and the cookie is httpOnly.
+            Switching identity means signing in as another account; a full sign-out means clearing
+            cookies in devtools.
           </span>
         </div>
       </section>
 
       <section className="card">
-        <h2>Кто я</h2>
+        <h2>Who am I</h2>
         {loading ? (
-          <p className="dim">загрузка…</p>
+          <p className="dim">loading…</p>
         ) : user ? (
           <>
             <p className="mono">
@@ -66,14 +67,14 @@ export default function Home() {
             </p>
             <div className="row">
               <button className="ghost" onClick={() => void refresh()}>
-                обновить
+                refresh
               </button>
-              {user.role === "USER" && <button onClick={() => void becomeCreator()}>стать автором</button>}
+              {user.role === "USER" && <button onClick={() => void becomeCreator()}>become a creator</button>}
             </div>
             <RawJson value={user} />
           </>
         ) : (
-          <p className="dim">не в системе</p>
+          <p className="dim">signed out</p>
         )}
       </section>
 
@@ -108,22 +109,22 @@ function Profile() {
 
   return (
     <section className="card">
-      <h2>Профиль</h2>
+      <h2>Profile</h2>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <div className="grid2">
         <div>
-          <label>имя</label>
+          <label>name</label>
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div>
-          <label>возраст</label>
+          <label>age</label>
           <input value={age} onChange={(e) => setAge(e.target.value)} />
         </div>
       </div>
-      <label>город</label>
+      <label>city</label>
       <input value={location} onChange={(e) => setLocation(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
-        <button onClick={() => void save()}>сохранить</button>
+        <button onClick={() => void save()}>save</button>
       </div>
     </section>
   );
@@ -154,9 +155,9 @@ function Interests({ enabled }: { enabled: boolean }) {
 
   return (
     <section className="card">
-      <h2>Интересы</h2>
+      <h2>Interests</h2>
       <ErrorBar error={err} onClear={() => setErr(null)} />
-      {all.length === 0 && <p className="dim">пусто — прогони seed-demo-users.sql</p>}
+      {all.length === 0 && <p className="dim">empty — run seed-demo-users.sql</p>}
       <div className="row">
         {all.map((i) => (
           <label key={i.id} className="row" style={{ width: "auto", gap: ".3rem" }}>
@@ -174,9 +175,9 @@ function Interests({ enabled }: { enabled: boolean }) {
       </div>
       <div className="row" style={{ marginTop: ".6rem" }}>
         <button disabled={!enabled} onClick={() => void save()}>
-          сохранить
+          save
         </button>
-        {saved && <span className="dim">сохранено</span>}
+        {saved && <span className="dim">saved</span>}
       </div>
       <RawJson value={all} label="GET /api/interests" />
     </section>
@@ -203,7 +204,7 @@ function Registration() {
 
   return (
     <details className="card">
-      <summary>Регистрация с подтверждением (обычно не нужна — аккаунты засеяны)</summary>
+      <summary>Registration with confirmation (usually not needed — the accounts are seeded)</summary>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <div className="grid2" style={{ marginTop: ".6rem" }}>
         <div>
@@ -211,7 +212,7 @@ function Registration() {
           <input value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
         <div>
-          <label>пароль</label>
+          <label>password</label>
           <input value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
       </div>
@@ -221,22 +222,22 @@ function Registration() {
           onClick={() =>
             void run(
               () => send("POST", "/auth/register", { email, password, role: "USER" }),
-              "письмо отправлено",
+              "email sent",
             )
           }
         >
-          зарегистрировать
+          register
         </button>
         <button
           className="ghost"
           onClick={() =>
-            void run(() => send("POST", "/auth/resend-confirmation", { email }), "письмо переотправлено")
+            void run(() => send("POST", "/auth/resend-confirmation", { email }), "email resent")
           }
         >
-          переотправить письмо
+          resend email
         </button>
       </div>
-      <label>token из письма</label>
+      <label>token from the email</label>
       <input value={token} onChange={(e) => setToken(e.target.value)} />
       <div className="row" style={{ marginTop: ".6rem" }}>
         <button
@@ -244,17 +245,17 @@ function Registration() {
           onClick={() =>
             void run(
               () => api(`/auth/confirm?token=${encodeURIComponent(token)}`),
-              "email подтверждён",
+              "email confirmed",
             )
           }
         >
-          подтвердить
+          confirm
         </button>
         {note && <span className="dim">{note}</span>}
       </div>
       <p className="dim">
-        Ссылка в письме ведёт на <span className="mono">localhost:3000/app/…</span> —
-        стенд такого роута не имеет, поэтому token надо скопировать из адресной строки вручную.
+        The link in the email points at <span className="mono">localhost:3000/app/…</span> — the
+        harness has no such route, so the token has to be copied out of the address bar by hand.
       </p>
     </details>
   );

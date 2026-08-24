@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { api, isApiError, send, type ApiError } from "@/lib/api";
 import { emptyState, reduce, withHistory, type ChatState } from "@/lib/reply-reducer";
 import { seenAssets } from "@/lib/seen-assets";
 import { useSession } from "@/lib/session";
 import { useStream } from "@/lib/stream";
-import type { ConversationResponse, MessageResponse, Page } from "@/lib/types";
+import type { AssetResponse, ConversationResponse, MessageResponse, Page } from "@/lib/types";
 import { ErrorBar } from "@/components/ErrorBar";
 import { RawJson } from "@/components/RawJson";
 
@@ -16,9 +16,9 @@ import { RawJson } from "@/components/RawJson";
 export const dynamic = "force-dynamic";
 
 const REASONS: Record<string, string> = {
-  ai_unavailable: "Ключ OpenAI не настроен — персона не ответит. Проверьте OPENAI_API_KEY.",
-  rate_limited: "Потолок ответов на диалог — 12 в минуту. Подождите минуту.",
-  internal: "Генерация упала. Смотрите лог бэкенда.",
+  ai_unavailable: "The OpenAI key is not configured — the persona will not reply. Check OPENAI_API_KEY.",
+  rate_limited: "The cap is 12 replies per conversation per minute. Wait a minute.",
+  internal: "Generation failed. Check the backend log.",
 };
 
 export default function Chat() {
@@ -33,8 +33,14 @@ export default function Chat() {
   const [assetId, setAssetId] = useState(contextFromFeed ?? "");
   const [err, setErr] = useState<ApiError | null>(null);
 
-  // read once on mount: the feed writes sessionStorage, this screen only offers the result
-  const assets = useMemo(() => seenAssets(), []);
+  // The feed writes sessionStorage and this screen only offers the result — but reading it
+  // while rendering would put clips in the client's first render that the server, which has
+  // no window, could not put in the HTML, and hydration would throw the <select> away. So the
+  // list arrives after mount instead.
+  const [assets, setAssets] = useState<AssetResponse[]>([]);
+  // sessionStorage is the external system here, and mount is the only moment it can be read
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setAssets(seenAssets()), []);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -83,15 +89,15 @@ export default function Chat() {
     <main>
       <ErrorBar error={err} onClear={() => setErr(null)} />
       <h1>
-        {conversation?.partnerDisplayName ?? `Диалог #${conversationId}`}{" "}
+        {conversation?.partnerDisplayName ?? `Conversation #${conversationId}`}{" "}
         {conversation?.personaEnabled ? (
           <span className="mono" style={{ color: "var(--accent)" }}>
             AI
           </span>
         ) : (
-          <span className="mono dim">без AI</span>
+          <span className="mono dim">no AI</span>
         )}
-        <span className={`status ${status}`}> · стрим {status}</span>
+        <span className={`status ${status}`}> · stream {status}</span>
       </h1>
 
       {state.banner && (
@@ -107,7 +113,7 @@ export default function Chat() {
               {m.body}
               <div className="meta">
                 {m.senderType}
-                {m.contextAssetId ? ` · из клипа #${m.contextAssetId}` : ""}
+                {m.contextAssetId ? ` · from clip #${m.contextAssetId}` : ""}
                 {` · ${new Date(m.createdAt).toLocaleTimeString()}`}
               </div>
             </div>
@@ -115,14 +121,14 @@ export default function Chat() {
           {drafts.map(([replyId, text]) => (
             <div key={replyId} className="bubble draft">
               {text || "…"}
-              <div className="meta">персона печатает · {replyId}</div>
+              <div className="meta">the persona is typing · {replyId}</div>
             </div>
           ))}
         </div>
       </section>
 
       <section className="card">
-        <label>сообщение</label>
+        <label>message</label>
         <textarea
           value={body}
           maxLength={4000}
@@ -134,9 +140,9 @@ export default function Chat() {
             }
           }}
         />
-        <label>контекст: клип, о котором речь</label>
+        <label>context: the clip being discussed</label>
         <select value={assetId} onChange={(e) => setAssetId(e.target.value)}>
-          <option value="">без контекста</option>
+          <option value="">no context</option>
           {assets.map((a) => (
             <option key={a.id} value={a.id}>
               #{a.id} {a.title ?? a.type}
@@ -144,20 +150,20 @@ export default function Chat() {
           ))}
         </select>
         <div className="row" style={{ marginTop: ".6rem" }}>
-          <button onClick={() => void sendMessage()}>отправить</button>
+          <button onClick={() => void sendMessage()}>send</button>
           <span className="dim">
-            контекст хранится на каждом сообщении, поэтому его можно менять посреди разговора
+            the context is stored on every message, so it can be changed mid-conversation
           </span>
         </div>
       </section>
 
       <section className="card">
         <p className="dim">
-          Автор, написавший сюда сам, AI не запускает — это правило бэкенда: пишет человек, значит
-          человек и вмешался. Токены приходят только зрителю, поэтому в окне автора ответ персоны
-          появляется целиком.
+          A creator writing here in person does not trigger the AI — that is a backend rule: if a
+          human writes, a human has stepped in. Tokens are only delivered to the viewer, so in the
+          creator window the reply from the persona appears all at once.
         </p>
-        <RawJson value={state} label="состояние экрана" />
+        <RawJson value={state} label="screen state" />
       </section>
     </main>
   );
