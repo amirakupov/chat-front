@@ -12,7 +12,7 @@ export default function Chats() {
   const [items, setItems] = useState<ConversationResponse[]>([]);
   const [err, setErr] = useState<ApiError | null>(null);
   const { subscribe, status } = useStream();
-
+// ok
   const load = useCallback(() => {
     api<Page<ConversationResponse>>("/api/chat/conversations?size=50")
       .then((p) => setItems(p.content))
