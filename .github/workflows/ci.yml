@@ -60,6 +60,9 @@ jobs:
         with:
           context: .
           push: false
+          # The job only checks that the image builds; nothing consumes it afterwards. Saying so
+          # explicitly also silences buildx's "no output specified" warning.
+          outputs: type=cacheonly
           # Layer cache in the Actions cache, so an unchanged lockfile skips npm ci entirely.
           cache-from: type=gha
           cache-to: type=gha,mode=max

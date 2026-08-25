@@ -20,6 +20,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# public/ is empty and git does not store empty directories, so a CI checkout arrives without it
+# and the COPY in the runner stage fails on a path that exists on every developer's machine.
+# Creating it here keeps both cases working — and still copies real assets once there are any.
+RUN mkdir -p /app/public
+
 # NEXT_PUBLIC_* is inlined into the client bundle at build time (lib/api.ts reads it at module
 # scope), so this is a build arg, not a runtime env var: setting it on `docker run` changes
 # nothing. A different backend means a different image.
